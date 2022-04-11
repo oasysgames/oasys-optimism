@@ -159,9 +159,11 @@ contract StateCommitmentChain is IStateCommitmentChain, Lib_AddressResolver {
     /**
      * @inheritdoc IStateCommitmentChain
      */
+    // [Oasys] Add virtual keyword to override
     function insideFraudProofWindow(Lib_OVMCodec.ChainBatchHeader memory _batchHeader)
         public
         view
+        virtual
         returns (bool _inside)
     {
         (uint256 timestamp, ) = abi.decode(_batchHeader.extraData, (uint256, address));
