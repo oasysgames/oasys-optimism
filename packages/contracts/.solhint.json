@@ -13,6 +13,7 @@
       "no-complex-fallback": "off",
       "not-rely-on-block-hash": "off",
       "reentrancy": "off",
-      "contract-name-camelcase": "off"
+      "contract-name-camelcase": "off",
+      "func-visibility": ["warn",{"ignoreConstructors":true}]
     }
 }
