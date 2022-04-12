@@ -16,7 +16,8 @@ contract OasysStateCommitmentChain is StateCommitmentChain, Ownable {
      * Events *
      **********/
 
-    event Verify(uint256 indexed _index, string _name);
+    event VerificationSucceeded(uint256 indexed _index, string _name);
+    event VerificationFailed(uint256 indexed _index, string _name);
     event VerifiedIndex(uint256 _index);
     event VerifierAdded(string indexed _name);
     event VerifierRemoved(string indexed _name);
@@ -119,6 +120,7 @@ contract OasysStateCommitmentChain is StateCommitmentChain, Ownable {
      */
     function verifyStateCommitmentByVerifier(
         string memory _verifier,
+        bool success,
         Lib_OVMCodec.ChainBatchHeader memory _batchHeader
     ) external {
         require(_isValidBatchHeader(_batchHeader), "Invalid batch header.");
@@ -128,10 +130,17 @@ contract OasysStateCommitmentChain is StateCommitmentChain, Ownable {
             "Invalid verifier."
         );
         uint256 index = _batchHeader.batchIndex;
+
+        if (!success) {
+            require(verifierNextIndex[nameHash] <= index, "Invalid batch index.");
+
+            emit VerificationFailed(index, _verifier);
+        }
+
         require(verifierNextIndex[nameHash] == index, "Invalid batch index.");
         verifierNextIndex[nameHash]++;
 
-        emit Verify(index, _verifier);
+        emit VerificationSucceeded(index, _verifier);
 
         _updateVerifiedIndex(index);
     }

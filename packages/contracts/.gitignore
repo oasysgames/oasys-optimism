@@ -3,4 +3,4 @@ src/contract-deployed-artifacts.ts
 
 # Oasys files
 deploy-config/oasys.ts
-oasys/
+/oasys/

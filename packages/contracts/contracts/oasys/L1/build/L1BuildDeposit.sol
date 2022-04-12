@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
+import { IAllowlist } from "../../libraries/IAllowlist.sol";
+
 /**
  * @title L1BuildDeposit
  * @dev L1BuildAgent maanages OAS deposits required to build the Verse-Layer.
@@ -12,6 +14,7 @@ contract L1BuildDeposit {
 
     uint256 public requiredAmount;
     uint256 public lockedBlock;
+    address public allowlistAddress;
     address public agentAddress;
 
     mapping(address => uint256) private depositTotal;
@@ -33,10 +36,16 @@ contract L1BuildDeposit {
     /**
      * @param _requiredAmount Required amount of the OAS token to build the Verse-Layer.
      * @param _lockedBlock Number of blocks to keep OAS tokens locked since building the Verse-Layer
+     * @param _allowlist Address of the Allowlist contract.
      */
-    constructor(uint256 _requiredAmount, uint256 _lockedBlock) {
+    constructor(
+        uint256 _requiredAmount,
+        uint256 _lockedBlock,
+        address _allowlist
+    ) {
         requiredAmount = _requiredAmount;
         lockedBlock = _lockedBlock;
+        allowlistAddress = _allowlist;
     }
 
     /********************
@@ -57,6 +66,8 @@ contract L1BuildDeposit {
      * @param _builder Address of the Verse-Builder.
      */
     function deposit(address _builder) external payable {
+        require(IAllowlist(allowlistAddress).containsAddress(_builder), "builder not allowed");
+
         address depositer = msg.sender;
         uint256 amount = msg.value;
         require(depositTotal[_builder] + amount <= requiredAmount, "over deposit amount");
