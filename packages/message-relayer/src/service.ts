@@ -7,7 +7,13 @@ import {
   Gauge,
   Counter,
 } from '@eth-optimism/common-ts'
-import { CrossChainMessenger, MessageStatus } from '@eth-optimism/sdk'
+import {
+  CrossChainMessenger,
+  DeepPartial,
+  DEFAULT_L2_CONTRACT_ADDRESSES,
+  MessageStatus,
+  OEContractsLike,
+} from '@eth-optimism/sdk'
 import { Provider } from '@ethersproject/abstract-provider'
 
 type MessageRelayerOptions = {
@@ -15,6 +21,12 @@ type MessageRelayerOptions = {
   l2RpcProvider: Provider
   l1Wallet: Signer
   fromL2TransactionIndex?: number
+  addressManager?: string
+  l1CrossDomainMessenger?: string
+  l1StandardBridge?: string
+  stateCommitmentChain?: string
+  canonicalTransactionChain?: string
+  bondManager?: string
 }
 
 type MessageRelayerMetrics = {
@@ -57,6 +69,30 @@ export class MessageRelayerService extends BaseServiceV2<
           desc: 'Index of the first L2 transaction to start processing from.',
           default: 0,
         },
+        addressManager: {
+          validator: validators.str,
+          desc: 'Address of the Lib_AddressManager on Layer1.',
+        },
+        l1CrossDomainMessenger: {
+          validator: validators.str,
+          desc: 'Address of the Proxy__OVM_L1CrossDomainMessenger on Layer1.',
+        },
+        l1StandardBridge: {
+          validator: validators.str,
+          desc: 'Address of the Proxy__OVM_L1StandardBridge on Layer1.',
+        },
+        stateCommitmentChain: {
+          validator: validators.str,
+          desc: 'Address of the StateCommitmentChain on Layer1.',
+        },
+        canonicalTransactionChain: {
+          validator: validators.str,
+          desc: 'Address of the CanonicalTransactionChain on Layer1.',
+        },
+        bondManager: {
+          validator: validators.str,
+          desc: 'Address of the BondManager on Layer1.',
+        },
       },
       metricsSpec: {
         highestCheckedL2Tx: {
@@ -80,12 +116,37 @@ export class MessageRelayerService extends BaseServiceV2<
       this.options.l1RpcProvider
     )
 
+    const l1ContractOpts = [
+      this.options.addressManager,
+      this.options.l1CrossDomainMessenger,
+      this.options.l1StandardBridge,
+      this.options.stateCommitmentChain,
+      this.options.canonicalTransactionChain,
+      this.options.bondManager,
+    ]
+
+    const contracts: DeepPartial<OEContractsLike> = undefined
+    if (l1ContractOpts.every((x) => x)) {
+      contracts.l1 = {
+        AddressManager: this.options.addressManager,
+        L1CrossDomainMessenger: this.options.l1CrossDomainMessenger,
+        L1StandardBridge: this.options.l1StandardBridge,
+        StateCommitmentChain: this.options.stateCommitmentChain,
+        CanonicalTransactionChain: this.options.canonicalTransactionChain,
+        BondManager: this.options.bondManager,
+      }
+      contracts.l2 = DEFAULT_L2_CONTRACT_ADDRESSES
+    } else if (l1ContractOpts.some((x) => x)) {
+      throw new Error('L1 contract address is missing.')
+    }
+
     const l1Network = await this.state.wallet.provider.getNetwork()
     const l1ChainId = l1Network.chainId
     this.state.messenger = new CrossChainMessenger({
       l1SignerOrProvider: this.state.wallet,
       l2SignerOrProvider: this.options.l2RpcProvider,
       l1ChainId,
+      contracts,
     })
 
     this.state.highestCheckedL2Tx = this.options.fromL2TransactionIndex || 1
