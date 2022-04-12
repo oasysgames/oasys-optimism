@@ -19,10 +19,15 @@ package ethapi
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"math/big"
+	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
@@ -48,11 +53,14 @@ import (
 	"github.com/ethereum-optimism/optimism/l2geth/rollup/rcfg"
 	"github.com/ethereum-optimism/optimism/l2geth/rpc"
 	"github.com/tyler-smith/go-bip39"
+	"gopkg.in/yaml.v2"
 )
 
 var (
 	errNoSequencerURL = errors.New("sequencer transaction forwarding not configured")
 	errStillSyncing   = errors.New("sequencer still syncing, cannot accept transactions")
+
+	acl *accessControl
 )
 
 const (
@@ -60,6 +68,11 @@ const (
 	// startup to make a connection to either the L1 or L2 backends.
 	defaultDialTimeout = 5 * time.Second
 )
+
+func init() {
+	// Initialization of access control.
+	acl = newAccessControl(os.Getenv("ACL_CONFIG"))
+}
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
 // It offers only methods that operate on public data that is freely available to anyone.
@@ -1618,6 +1631,17 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 		return common.Hash{}, errStillSyncing
 	}
 
+	// Access control by from address.
+	from, err := getFromAddress(b, tx)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	if allow, err := acl.allow(from); err != nil {
+		return common.Hash{}, err
+	} else if !allow {
+		return common.Hash{}, errors.New("unauthorized transaction")
+	}
+
 	if err := b.SendTx(ctx, tx); err != nil {
 		return common.Hash{}, err
 	}
@@ -2095,4 +2119,91 @@ func (s *PublicNetAPI) PeerCount() hexutil.Uint {
 // Version returns the current ethereum protocol version.
 func (s *PublicNetAPI) Version() string {
 	return fmt.Sprintf("%d", s.networkVersion)
+}
+
+// accessControl
+type accessControl struct {
+	mu     sync.Mutex
+	config string
+	hash   string
+
+	from []common.Address `yaml:"from"`
+}
+
+// Reload access control config.
+func (r *accessControl) reload() error {
+	if r.config == "" {
+		return nil
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	data, err := ioutil.ReadFile(r.config)
+	if err != nil {
+		r.from = []common.Address{}
+		return err
+	}
+
+	hashByte := md5.Sum(data)
+	hash := hex.EncodeToString(hashByte[:])
+	if hash == r.hash {
+		return nil
+	}
+
+	err = yaml.Unmarshal(data, &r)
+	if err != nil {
+		r.from = []common.Address{}
+		return err
+	}
+
+	r.hash = hash
+	log.Info("Reload access control config", "md5hash", r.hash)
+	return nil
+}
+
+// Access control by from address.
+func (r *accessControl) allow(from common.Address) (bool, error) {
+	if r.config == "" {
+		return true, nil
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, val := range r.from {
+		if val == from {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// Returns access control.
+func newAccessControl(config string) *accessControl {
+	acl := &accessControl{config: config, from: []common.Address{}}
+
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			<-ticker.C
+			if err := acl.reload(); err != nil {
+				log.Error("Failed reload access control config", "err", err.Error())
+			}
+		}
+	}()
+
+	return acl
+}
+
+// Returns from address of transaction.
+func getFromAddress(backend Backend, tx *types.Transaction) (common.Address, error) {
+	signer := types.MakeSigner(backend.ChainConfig(), backend.CurrentBlock().Number())
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		return common.Address{}, err
+	}
+	return from, nil
 }
