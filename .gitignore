@@ -5,6 +5,7 @@ temp
 .nyc_output
 coverage.json
 *.tsbuildinfo
+.go-version
 
 dist
 artifacts
