@@ -125,17 +125,19 @@ export class MessageRelayerService extends BaseServiceV2<
       this.options.bondManager,
     ]
 
-    const contracts: DeepPartial<OEContractsLike> = undefined
+    let contracts: DeepPartial<OEContractsLike> = undefined
     if (l1ContractOpts.every((x) => x)) {
-      contracts.l1 = {
-        AddressManager: this.options.addressManager,
-        L1CrossDomainMessenger: this.options.l1CrossDomainMessenger,
-        L1StandardBridge: this.options.l1StandardBridge,
-        StateCommitmentChain: this.options.stateCommitmentChain,
-        CanonicalTransactionChain: this.options.canonicalTransactionChain,
-        BondManager: this.options.bondManager,
+      contracts = {
+        l1: {
+          AddressManager: this.options.addressManager,
+          L1CrossDomainMessenger: this.options.l1CrossDomainMessenger,
+          L1StandardBridge: this.options.l1StandardBridge,
+          StateCommitmentChain: this.options.stateCommitmentChain,
+          CanonicalTransactionChain: this.options.canonicalTransactionChain,
+          BondManager: this.options.bondManager,
+        },
+        l2: DEFAULT_L2_CONTRACT_ADDRESSES,
       }
-      contracts.l2 = DEFAULT_L2_CONTRACT_ADDRESSES
     } else if (l1ContractOpts.some((x) => x)) {
       throw new Error('L1 contract address is missing.')
     }
