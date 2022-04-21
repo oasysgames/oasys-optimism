@@ -6,6 +6,8 @@
 # when used with typescript/hardhat: https://github.com/nomiclabs/hardhat/issues/1219
 FROM node:16.13-buster-slim as base
 
+ARG NODE_OPTIONS
+
 RUN apt-get update -y && apt-get install -y --no-install-recommends git \
       curl \
       jq \
@@ -33,7 +35,7 @@ COPY ./packages ./packages
 COPY ./integration-tests ./integration-tests
 
 # build it!
-RUN yarn build
+RUN NODE_OPTIONS=$NODE_OPTIONS yarn build
 
 
 FROM base as deployer
