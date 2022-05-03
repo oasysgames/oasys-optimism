@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
+import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+
 /**
  * @title IL1StandardBridge
  */
-interface IL1ERC721Bridge {
+interface IL1ERC721Bridge is IERC721Receiver {
     /**********
      * Events *
      **********/
@@ -80,7 +82,8 @@ interface IL1ERC721Bridge {
      *************************/
 
     /**
-     * @dev Complete a withdrawal from L2 to L1, and transfer to the recipient of the L1 ERC721 token.
+     * @dev Complete a withdrawal from L2 to L1,
+     * and transfer to the recipient of the L1 ERC721 token.
      * This call will fail if the initialized withdrawal from L2 has not been finalized.
      *
      * @param _l1Token Address of L1 token to finalizeWithdrawal for.

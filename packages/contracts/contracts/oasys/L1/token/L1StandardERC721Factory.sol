@@ -29,7 +29,8 @@ contract L1StandardERC721Factory {
         string memory _symbol,
         string memory _baseTokenURI
     ) external {
-        L1StandardERC721 erc721 = new L1StandardERC721(_name, _symbol, _baseTokenURI);
+        L1StandardERC721 erc721 = new L1StandardERC721(_name, _symbol, _baseTokenURI, msg.sender);
+
         emit ERC721Created(_symbol, address(erc721));
     }
 }
