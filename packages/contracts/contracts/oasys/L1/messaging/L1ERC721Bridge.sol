@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
+/* Contract Imports */
+import { ERC721Holder } from "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
+
 /* Interface Imports */
 import { IL1ERC721Bridge } from "./IL1ERC721Bridge.sol";
 import { IL2ERC721Bridge } from "../../L2/messaging/IL2ERC721Bridge.sol";
@@ -17,7 +20,7 @@ import { Address } from "@openzeppelin/contracts/utils/Address.sol";
  * and listening to it for newly finalized withdrawals.
  *
  */
-contract L1ERC721Bridge is IL1ERC721Bridge, CrossDomainEnabled {
+contract L1ERC721Bridge is IL1ERC721Bridge, CrossDomainEnabled, ERC721Holder {
     /********************************
      * External Contract References *
      ********************************/
@@ -135,18 +138,6 @@ contract L1ERC721Bridge is IL1ERC721Bridge, CrossDomainEnabled {
 
         // slither-disable-next-line reentrancy-events
         emit ERC721DepositInitiated(_l1Token, _l2Token, _from, _to, _tokenId, _data);
-    }
-
-    /**
-     * @dev This contract is ready to receiver the NFT.
-     */
-    function onERC721Received(
-        address operator,
-        address from,
-        uint256 tokenId,
-        bytes calldata data
-    ) external returns (bytes4) {
-        return this.onERC721Received.selector;
     }
 
     /*************************

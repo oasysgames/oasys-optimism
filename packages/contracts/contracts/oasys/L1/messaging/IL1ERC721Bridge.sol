@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
-import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
-
 /**
  * @title IL1StandardBridge
  */
-interface IL1ERC721Bridge is IERC721Receiver {
+interface IL1ERC721Bridge {
     /**********
      * Events *
      **********/
