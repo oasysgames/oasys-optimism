@@ -137,6 +137,18 @@ contract L1ERC721Bridge is IL1ERC721Bridge, CrossDomainEnabled {
         emit ERC721DepositInitiated(_l1Token, _l2Token, _from, _to, _tokenId, _data);
     }
 
+    /**
+     * @dev This contract is ready to receiver the NFT.
+     */
+    function onERC721Received(
+        address operator,
+        address from,
+        uint256 tokenId,
+        bytes calldata data
+    ) external returns (bytes4) {
+        return this.onERC721Received.selector;
+    }
+
     /*************************
      * Cross-chain Functions *
      *************************/
