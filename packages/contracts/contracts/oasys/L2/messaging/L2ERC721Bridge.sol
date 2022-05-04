@@ -11,7 +11,7 @@ import { CrossDomainEnabled } from "../../../libraries/bridge/CrossDomainEnabled
 import { Lib_PredeployAddresses } from "../../../libraries/constants/Lib_PredeployAddresses.sol";
 
 /* Contract Imports */
-import { L2StandardERC721 } from "../token/L2StandardERC721.sol";
+import { IL2StandardERC721 } from "../token/IL2StandardERC721.sol";
 
 /**
  * @title L2StandardBridge
@@ -95,11 +95,11 @@ contract L2ERC721Bridge is IL2ERC721Bridge, CrossDomainEnabled {
         // When a withdrawal is initiated, we burn the withdrawer's funds to prevent subsequent L2
         // usage
         // slither-disable-next-line reentrancy-events
-        L2StandardERC721(_l2Token).burn(_tokenId);
+        IL2StandardERC721(_l2Token).burn(msg.sender, _tokenId);
 
         // Construct calldata for l1TokenBridge.finalizeERC20Withdrawal(_to, _tokenId)
         // slither-disable-next-line reentrancy-events
-        address l1Token = L2StandardERC721(_l2Token).l1Token();
+        address l1Token = IL2StandardERC721(_l2Token).l1Token();
         bytes memory message;
 
         message = abi.encodeWithSelector(
@@ -139,13 +139,13 @@ contract L2ERC721Bridge is IL2ERC721Bridge, CrossDomainEnabled {
         // verify the deposited token on L1 matches the L2 deposited token representation here
         if (
             // slither-disable-next-line reentrancy-events
-            ERC165Checker.supportsInterface(_l2Token, 0x1d1d8b63) &&
-            _l1Token == L2StandardERC721(_l2Token).l1Token()
+            ERC165Checker.supportsInterface(_l2Token, type(IL2StandardERC721).interfaceId) &&
+            _l1Token == IL2StandardERC721(_l2Token).l1Token()
         ) {
             // When a deposit is finalized, we credit the account on L2 with the same amount of
             // tokens.
             // slither-disable-next-line reentrancy-events
-            L2StandardERC721(_l2Token).mint(_to, _tokenId);
+            IL2StandardERC721(_l2Token).mint(_to, _tokenId);
             // slither-disable-next-line reentrancy-events
             emit DepositFinalized(_l1Token, _l2Token, _from, _to, _tokenId, _data);
         } else {
