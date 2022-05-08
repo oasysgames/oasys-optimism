@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
-/* Contract Imports */
-import { ERC721Holder } from "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
-
 /* Interface Imports */
 import { IL1ERC721Bridge } from "./IL1ERC721Bridge.sol";
 import { IL2ERC721Bridge } from "../../L2/messaging/IL2ERC721Bridge.sol";
@@ -20,7 +17,7 @@ import { Address } from "@openzeppelin/contracts/utils/Address.sol";
  * and listening to it for newly finalized withdrawals.
  *
  */
-contract L1ERC721Bridge is IL1ERC721Bridge, CrossDomainEnabled, ERC721Holder {
+contract L1ERC721Bridge is IL1ERC721Bridge, CrossDomainEnabled {
     /********************************
      * External Contract References *
      ********************************/
@@ -115,11 +112,8 @@ contract L1ERC721Bridge is IL1ERC721Bridge, CrossDomainEnabled, ERC721Holder {
         uint32 _l2Gas,
         bytes calldata _data
     ) internal {
-        // When a deposit is initiated on L1, the L1 Bridge transfers the funds to itself for future
-        // withdrawals. safeTransferFrom also checks if the contract has code, so this will fail if
-        // _from is an EOA or address(0).
         // slither-disable-next-line reentrancy-events, reentrancy-benign
-        IERC721(_l1Token).safeTransferFrom(_from, address(this), _tokenId);
+        IERC721(_l1Token).transferFrom(_from, address(this), _tokenId);
 
         // Construct calldata for _l2Token.finalizeDeposit(_to, _tokenId)
         bytes memory message = abi.encodeWithSelector(
@@ -157,7 +151,7 @@ contract L1ERC721Bridge is IL1ERC721Bridge, CrossDomainEnabled, ERC721Holder {
     ) external onlyFromCrossDomainAccount(l2ERC721Bridge) {
         // When a withdrawal is finalized on L1, the L1 Bridge transfers the funds to the withdrawer
         // slither-disable-next-line reentrancy-events
-        IERC721(_l1Token).safeTransferFrom(address(this), _to, _tokenId);
+        IERC721(_l1Token).transferFrom(address(this), _to, _tokenId);
 
         // slither-disable-next-line reentrancy-events
         emit ERC721WithdrawalFinalized(_l1Token, _l2Token, _from, _to, _tokenId, _data);
