@@ -27,6 +27,7 @@ type MessageRelayerOptions = {
   stateCommitmentChain?: string
   canonicalTransactionChain?: string
   bondManager?: string
+  pollInterval?: number
 }
 
 type MessageRelayerMetrics = {
@@ -92,6 +93,11 @@ export class MessageRelayerService extends BaseServiceV2<
         bondManager: {
           validator: validators.str,
           desc: 'Address of the BondManager on Layer1.',
+        },
+        pollInterval: {
+          validator: validators.num,
+          desc: 'Polling interval of StateCommitmentChain (unit: msec).',
+          default: 1000,
         },
       },
       metricsSpec: {
@@ -202,17 +208,28 @@ export class MessageRelayerService extends BaseServiceV2<
     let isFinalized = true
     for (const message of messages) {
       const status = await this.state.messenger.getMessageStatus(message)
-      if (
-        status === MessageStatus.IN_CHALLENGE_PERIOD ||
-        status === MessageStatus.STATE_ROOT_NOT_PUBLISHED
-      ) {
+      if (status === MessageStatus.STATE_ROOT_NOT_PUBLISHED) {
         isFinalized = false
+      } else if (status === MessageStatus.IN_CHALLENGE_PERIOD) {
+        // Checks whether a given batch has exceeded the verification threshold,
+        // or is still inside its fraud proof window.
+        const resolved = await this.state.messenger.toCrossChainMessage(message)
+        const stateRoot = await this.state.messenger.getMessageStateRoot(
+          resolved
+        )
+        isFinalized =
+          (await this.state.messenger.contracts.l1.StateCommitmentChain.insideFraudProofWindow(
+            stateRoot.batch.header
+          )) === false
       }
     }
 
     if (!isFinalized) {
       this.logger.info(
         `tx not yet finalized, waiting: ${this.state.highestCheckedL2Tx}`
+      )
+      await new Promise((resolve) =>
+        setTimeout(() => resolve(true), this.options.pollInterval || 1000)
       )
       return
     } else {
