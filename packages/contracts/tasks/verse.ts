@@ -25,12 +25,12 @@ const descriptions = {
 
 const getL1BuildDeposit = async (hre: HardhatRuntimeEnvironment) =>
   (await hre.ethers.getContractFactory('L1BuildDeposit')).attach(
-    '0x5200000000000000000000000000000000000006'
+    '0x5200000000000000000000000000000000000007'
   )
 
 const getL1BuildAgent = async (hre: HardhatRuntimeEnvironment) =>
   (await hre.ethers.getContractFactory('L1BuildAgent')).attach(
-    '0x5200000000000000000000000000000000000007'
+    '0x5200000000000000000000000000000000000008'
   )
 
 const getNamedAddresses = async (
