@@ -2127,7 +2127,7 @@ type accessControl struct {
 	config string
 	hash   string
 
-	from []common.Address `yaml:"from"`
+	From []common.Address `yaml:"from"`
 }
 
 // Reload access control config.
@@ -2141,7 +2141,7 @@ func (r *accessControl) reload() error {
 
 	data, err := ioutil.ReadFile(r.config)
 	if err != nil {
-		r.from = []common.Address{}
+		r.From = []common.Address{}
 		return err
 	}
 
@@ -2153,7 +2153,7 @@ func (r *accessControl) reload() error {
 
 	err = yaml.Unmarshal(data, &r)
 	if err != nil {
-		r.from = []common.Address{}
+		r.From = []common.Address{}
 		return err
 	}
 
@@ -2171,7 +2171,7 @@ func (r *accessControl) allow(from common.Address) (bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	for _, val := range r.from {
+	for _, val := range r.From {
 		if val == from {
 			return true, nil
 		}
@@ -2181,7 +2181,7 @@ func (r *accessControl) allow(from common.Address) (bool, error) {
 
 // Returns access control.
 func newAccessControl(config string) *accessControl {
-	acl := &accessControl{config: config, from: []common.Address{}}
+	acl := &accessControl{config: config, From: []common.Address{}}
 
 	go func() {
 		ticker := time.NewTicker(10 * time.Second)
