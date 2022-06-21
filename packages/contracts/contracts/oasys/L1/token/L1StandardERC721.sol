@@ -43,17 +43,17 @@ contract L1StandardERC721 is
      * See {ERC721-tokenURI}.
      */
     constructor(
+        address owner,
         string memory name,
         string memory symbol,
-        string memory baseTokenURI,
-        address creator
+        string memory baseTokenURI
     ) ERC721(name, symbol) {
         _baseTokenURI = baseTokenURI;
 
-        _setupRole(DEFAULT_ADMIN_ROLE, creator);
+        _setupRole(DEFAULT_ADMIN_ROLE, owner);
 
-        _setupRole(MINTER_ROLE, creator);
-        _setupRole(PAUSER_ROLE, creator);
+        _setupRole(MINTER_ROLE, owner);
+        _setupRole(PAUSER_ROLE, owner);
     }
 
     function _baseURI() internal view virtual override returns (string memory) {

@@ -24,7 +24,7 @@ contract L1StandardERC20Factory {
      * @param _symbol Symbol of the ERC20.
      */
     function createStandardERC20(string memory _name, string memory _symbol) external {
-        L1StandardERC20 erc20 = new L1StandardERC20(_name, _symbol);
+        L1StandardERC20 erc20 = new L1StandardERC20(msg.sender, _name, _symbol);
         emit ERC20Created(_symbol, address(erc20));
     }
 }
