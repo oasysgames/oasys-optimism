@@ -85,7 +85,8 @@ contract L1BuildDeposit {
      */
     function withdraw(address _builder, uint256 _amount) external {
         address depositer = msg.sender;
-        require(buildBlock[_builder] + lockedBlock < block.number, "while OAS locked");
+        uint256 _buildBlock = buildBlock[_builder];
+        require(_buildBlock == 0 || _buildBlock + lockedBlock < block.number, "while OAS locked");
         require(depositAmount[_builder][depositer] >= _amount, "your deposit amount shortage");
 
         depositTotal[_builder] -= _amount;
