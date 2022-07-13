@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.9;
+pragma solidity 0.8.9;
 
 import { L1BuildAgent } from "./L1BuildAgent.sol";
 import { L1BuildParam } from "./L1BuildParam.sol";

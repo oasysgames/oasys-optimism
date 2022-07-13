@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.9;
+pragma solidity 0.8.9;
 
 import { Lib_PredeployAddresses } from "../../../libraries/constants/Lib_PredeployAddresses.sol";
 import { L1BuildDeposit } from "./L1BuildDeposit.sol";
