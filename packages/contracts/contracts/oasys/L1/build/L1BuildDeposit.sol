@@ -66,6 +66,8 @@ contract L1BuildDeposit {
      * @param _builder Address of the Verse-Builder.
      */
     function deposit(address _builder) external payable {
+        require(_builder != address(0), "builder is zero address");
+        require(msg.value > 0, "no OAS");
         require(IAllowlist(allowlistAddress).containsAddress(_builder), "builder not allowed");
 
         address depositer = msg.sender;
@@ -84,6 +86,9 @@ contract L1BuildDeposit {
      * @param _amount Amount of the OAS token.
      */
     function withdraw(address _builder, uint256 _amount) external {
+        require(_builder != address(0), "builder is zero address");
+        require(_amount > 0, "amount is zero");
+
         address depositer = msg.sender;
         uint256 _buildBlock = buildBlock[_builder];
         require(_buildBlock == 0 || _buildBlock + lockedBlock < block.number, "while OAS locked");

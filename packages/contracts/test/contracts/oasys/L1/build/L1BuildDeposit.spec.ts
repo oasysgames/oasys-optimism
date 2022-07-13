@@ -55,6 +55,18 @@ describe('L1BuildDeposit', () => {
       await expect(tx).to.emit(l1BuildDeposit, 'Deposit').withArgs(builder.address, depositer1.address, requiredAmount)
     })
 
+    it('builder is zero address', async () => {
+      const tx = l1BuildDeposit
+        .connect(depositer1)
+        .deposit('0x0000000000000000000000000000000000000000', { value: requiredAmount })
+      await expect(tx).be.revertedWith('builder is zero address')
+    })
+
+    it('no OAS', async () => {
+      const tx = l1BuildDeposit.connect(depositer1).deposit(depositer1.address)
+      await expect(tx).be.revertedWith('no OAS')
+    })
+
     it('builder not allowed', async () => {
       const tx = l1BuildDeposit.connect(depositer1).deposit(depositer1.address, { value: requiredAmount })
       await expect(tx).be.revertedWith('builder not allowed')
@@ -67,8 +79,11 @@ describe('L1BuildDeposit', () => {
   })
 
   describe('withdraw()', () => {
-    it('normally', async () => {
+    beforeEach(async () => {
       await l1BuildDeposit.connect(depositer1).deposit(builder.address, { value: requiredAmount })
+    })
+
+    it('normally', async () => {
       await l1BuildDeposit.connect(agent).build(builder.address)
       await network.provider.send('hardhat_mine', ['0x' + lockedBlock.toString(16)])
 
@@ -79,8 +94,19 @@ describe('L1BuildDeposit', () => {
       expect(await depositer1.getBalance()).to.gte(toWei('9999'))
     })
 
+    it('builder is zero address', async () => {
+      const tx = l1BuildDeposit
+        .connect(depositer1)
+        .withdraw('0x0000000000000000000000000000000000000000', requiredAmount)
+      await expect(tx).to.be.revertedWith('builder is zero address')
+    })
+
+    it('amount is zero', async () => {
+      const tx = l1BuildDeposit.connect(depositer1).withdraw(builder.address, 0)
+      await expect(tx).to.be.revertedWith('amount is zero')
+    })
+
     it('while OAS locked', async () => {
-      await l1BuildDeposit.connect(depositer1).deposit(builder.address, { value: requiredAmount })
       await l1BuildDeposit.connect(agent).build(builder.address)
       await network.provider.send('hardhat_mine', ['0x' + (lockedBlock - 1).toString(16)])
 
@@ -89,13 +115,11 @@ describe('L1BuildDeposit', () => {
     })
 
     it('immediate withdraw if not built', async () => {
-      await l1BuildDeposit.connect(depositer1).deposit(builder.address, { value: requiredAmount })
       await l1BuildDeposit.connect(depositer1).withdraw(builder.address, requiredAmount)
       expect(await depositer1.getBalance()).to.gte(toWei('9999'))
     })
 
     it('deposit amount shortage', async () => {
-      await l1BuildDeposit.connect(depositer1).deposit(builder.address, { value: requiredAmount })
       await l1BuildDeposit.connect(agent).build(builder.address)
       await network.provider.send('hardhat_mine', ['0x' + lockedBlock.toString(16)])
 
