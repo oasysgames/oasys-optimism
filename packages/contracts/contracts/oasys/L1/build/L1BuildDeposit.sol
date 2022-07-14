@@ -119,6 +119,7 @@ contract L1BuildDeposit {
     /**
      * Returns the total amount of the OAS tokens.
      * @param _builder Address of the Verse-Builder.
+     * @return amount Total amount of the OAS tokens.
      */
     function getDepositTotal(address _builder) external view returns (uint256) {
         return depositTotal[_builder];
@@ -128,6 +129,7 @@ contract L1BuildDeposit {
      * Returns the amount of the OAS tokens by the depositer.
      * @param _builder Address of the Verse-Builder.
      * @param _depositer Address of the depositer.
+     * @return amount Amount of the OAS tokens by the depositer.
      */
     function getDepositAmount(address _builder, address _depositer)
         external
@@ -140,6 +142,7 @@ contract L1BuildDeposit {
     /**
      * Returns the block number built the Verse-Layer.
      * @param _builder Address of the Verse-Builder.
+     * @return block Block number.
      */
     function getBuildBlock(address _builder) external view returns (uint256) {
         return buildBlock[_builder];
