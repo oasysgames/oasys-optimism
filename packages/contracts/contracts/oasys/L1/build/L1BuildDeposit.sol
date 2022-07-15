@@ -5,7 +5,7 @@ import { IAllowlist } from "../../libraries/IAllowlist.sol";
 
 /**
  * @title L1BuildDeposit
- * @dev L1BuildAgent maanages OAS deposits required to build the Verse-Layer.
+ * @dev L1BuildAgent manages OAS deposits required to build the Verse-Layer.
  */
 contract L1BuildDeposit {
     /**********************
