@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.9;
+pragma solidity 0.8.9;
 
 import { L1BuildAgent } from "./L1BuildAgent.sol";
 import { L1CrossDomainMessenger } from "../../../L1/messaging/L1CrossDomainMessenger.sol";

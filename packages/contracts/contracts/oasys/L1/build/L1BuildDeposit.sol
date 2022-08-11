@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.9;
+pragma solidity 0.8.9;
 
 import { IAllowlist } from "../../libraries/IAllowlist.sol";
 
 /**
  * @title L1BuildDeposit
- * @dev L1BuildAgent maanages OAS deposits required to build the Verse-Layer.
+ * @dev L1BuildAgent manages OAS deposits required to build the Verse-Layer.
  */
 contract L1BuildDeposit {
     /**********************
@@ -17,9 +17,9 @@ contract L1BuildDeposit {
     address public allowlistAddress;
     address public agentAddress;
 
-    mapping(address => uint256) private depositTotal;
-    mapping(address => mapping(address => uint256)) private depositAmount;
-    mapping(address => uint256) private buildBlock;
+    mapping(address => uint256) private _depositTotal;
+    mapping(address => mapping(address => uint256)) private _depositAmount;
+    mapping(address => uint256) private _buildBlock;
 
     /**********
      * Events *
@@ -66,14 +66,16 @@ contract L1BuildDeposit {
      * @param _builder Address of the Verse-Builder.
      */
     function deposit(address _builder) external payable {
+        require(_builder != address(0), "builder is zero address");
+        require(msg.value > 0, "no OAS");
         require(IAllowlist(allowlistAddress).containsAddress(_builder), "builder not allowed");
 
         address depositer = msg.sender;
         uint256 amount = msg.value;
-        require(depositTotal[_builder] + amount <= requiredAmount, "over deposit amount");
+        require(_depositTotal[_builder] + amount <= requiredAmount, "over deposit amount");
 
-        depositTotal[_builder] += amount;
-        depositAmount[_builder][depositer] += amount;
+        _depositTotal[_builder] += amount;
+        _depositAmount[_builder][depositer] += amount;
 
         emit Deposit(_builder, depositer, amount);
     }
@@ -84,13 +86,17 @@ contract L1BuildDeposit {
      * @param _amount Amount of the OAS token.
      */
     function withdraw(address _builder, uint256 _amount) external {
-        address depositer = msg.sender;
-        require(buildBlock[_builder] + lockedBlock < block.number, "while OAS locked");
-        require(depositAmount[_builder][depositer] >= _amount, "your deposit amount shortage");
+        require(_builder != address(0), "builder is zero address");
+        require(_amount > 0, "amount is zero");
 
-        depositTotal[_builder] -= _amount;
-        depositAmount[_builder][depositer] -= _amount;
-        (bool success, ) = depositer.call{ value: _amount }(new bytes(0));
+        address depositer = msg.sender;
+        uint256 buildBlock = _buildBlock[_builder];
+        require(buildBlock == 0 || buildBlock + lockedBlock < block.number, "while OAS locked");
+        require(_depositAmount[_builder][depositer] >= _amount, "your deposit amount shortage");
+
+        _depositTotal[_builder] -= _amount;
+        _depositAmount[_builder][depositer] -= _amount;
+        (bool success, ) = depositer.call{ value: _amount }("");
         require(success, "OAS transfer failed");
 
         emit Withdrawal(_builder, depositer, _amount);
@@ -102,10 +108,10 @@ contract L1BuildDeposit {
      */
     function build(address _builder) external {
         require(msg.sender == agentAddress, "only L1BuildAgent can call me");
-        require(depositTotal[_builder] >= requiredAmount, "deposit amount shortage");
-        require(buildBlock[_builder] == 0, "already built by builder");
+        require(_depositTotal[_builder] >= requiredAmount, "deposit amount shortage");
+        require(_buildBlock[_builder] == 0, "already built by builder");
 
-        buildBlock[_builder] = block.number;
+        _buildBlock[_builder] = block.number;
 
         emit Build(_builder, block.number);
     }
@@ -113,29 +119,32 @@ contract L1BuildDeposit {
     /**
      * Returns the total amount of the OAS tokens.
      * @param _builder Address of the Verse-Builder.
+     * @return amount Total amount of the OAS tokens.
      */
     function getDepositTotal(address _builder) external view returns (uint256) {
-        return depositTotal[_builder];
+        return _depositTotal[_builder];
     }
 
     /**
      * Returns the amount of the OAS tokens by the depositer.
      * @param _builder Address of the Verse-Builder.
      * @param _depositer Address of the depositer.
+     * @return amount Amount of the OAS tokens by the depositer.
      */
     function getDepositAmount(address _builder, address _depositer)
         external
         view
         returns (uint256)
     {
-        return depositAmount[_builder][_depositer];
+        return _depositAmount[_builder][_depositer];
     }
 
     /**
      * Returns the block number built the Verse-Layer.
      * @param _builder Address of the Verse-Builder.
+     * @return block Block number.
      */
     function getBuildBlock(address _builder) external view returns (uint256) {
-        return buildBlock[_builder];
+        return _buildBlock[_builder];
     }
 }
