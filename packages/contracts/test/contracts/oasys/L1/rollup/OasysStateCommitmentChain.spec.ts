@@ -625,6 +625,10 @@ describe('OasysStateCommitmentChain', () => {
       await expect(tx)
         .to.emit(OasysStateCommitmentChain, 'StateBatchDeleted')
         .withArgs(batchHeader.batchIndex, batchHeader.batchRoot)
+
+      await expect(tx)
+        .to.emit(OasysStateCommitmentChain, 'StateBatchFailed')
+        .withArgs(batchHeader.batchIndex, batchHeader.batchRoot)
     })
 
     it('should be reverted by `Invalid message sender.`', async () => {

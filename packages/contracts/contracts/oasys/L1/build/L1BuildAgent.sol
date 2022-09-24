@@ -23,9 +23,11 @@ contract L1BuildAgent {
     address public step3Address;
     address public step4Address;
 
-    mapping(uint256 => address) private chainAddressManager;
-    mapping(uint256 => string[]) private chainContractNames;
-    mapping(uint256 => address[]) private chainContractAddresses;
+    mapping(uint256 => address) private _chainAddressManager;
+    mapping(uint256 => string[]) private _chainContractNames;
+    mapping(uint256 => address[]) private _chainContractAddresses;
+    address[] private _builders;
+    uint256[] private _chainIds;
 
     /***************
      * Constructor *
@@ -81,7 +83,7 @@ contract L1BuildAgent {
         address _ctcBatches
     ) external {
         require(msg.sender == step1Address, "only the L1BuildStep1 can call");
-        chainAddressManager[_chainId] = _addressManager;
+        _chainAddressManager[_chainId] = _addressManager;
         setContractNamedAddress(_chainId, "OVM_Sequencer", _sequencer);
         setContractNamedAddress(_chainId, "OVM_Proposer", _proposer);
         setContractNamedAddress(_chainId, "CanonicalTransactionChain", _canonicalTransactionChain);
@@ -151,12 +153,46 @@ contract L1BuildAgent {
         address _sequencer,
         address _proposer
     ) external {
+        require(_chainAddressManager[_chainId] == address(0), "already built");
+
         address _builder = msg.sender;
         L1BuildDeposit(depositAddress).build(_builder);
         L1BuildStep1(step1Address).build(_chainId, _sequencer, _proposer);
         L1BuildStep2(step2Address).build(_chainId, _builder);
         L1BuildStep3(step3Address).build(_chainId, _builder);
         L1BuildStep4(step4Address).build(_chainId, _builder);
+        _builders.push(_builder);
+        _chainIds.push(_chainId);
+    }
+
+    /**
+     * Returns an array of Builder and Chain ID of built Verse-Layers.
+     * @param cursor The index of the first item being requested.
+     * @param howMany Indicates how many items should be returned.
+     * @return (builders, chainIds, newCursor) Array of Builder and Chain ID of built Verse-Layers.
+     */
+    function getBuilts(uint256 cursor, uint256 howMany)
+        external
+        view
+        returns (
+            address[] memory,
+            uint256[] memory,
+            uint256
+        )
+    {
+        uint256 length = _builders.length;
+        if (cursor + howMany >= length) {
+            howMany = length - cursor;
+        }
+
+        address[] memory builders = new address[](howMany);
+        uint256[] memory chainIds = new uint256[](howMany);
+        for (uint256 i = 0; i < howMany; i++) {
+            builders[i] = _builders[cursor + i];
+            chainIds[i] = _chainIds[cursor + i];
+        }
+
+        return (builders, chainIds, cursor + howMany);
     }
 
     /**
@@ -165,7 +201,7 @@ contract L1BuildAgent {
      * @return _proposer Address of the Verse-Layer Proposer.
      */
     function getAddressManager(uint256 _chainId) external view returns (address) {
-        return chainAddressManager[_chainId];
+        return _chainAddressManager[_chainId];
     }
 
     /**
@@ -179,7 +215,7 @@ contract L1BuildAgent {
         view
         returns (string[] memory, address[] memory)
     {
-        return (chainContractNames[_chainId], chainContractAddresses[_chainId]);
+        return (_chainContractNames[_chainId], _chainContractAddresses[_chainId]);
     }
 
     /**********************
@@ -197,7 +233,7 @@ contract L1BuildAgent {
         string memory _name,
         address _address
     ) internal {
-        chainContractNames[_chainId].push(_name);
-        chainContractAddresses[_chainId].push(_address);
+        _chainContractNames[_chainId].push(_name);
+        _chainContractAddresses[_chainId].push(_address);
     }
 }
