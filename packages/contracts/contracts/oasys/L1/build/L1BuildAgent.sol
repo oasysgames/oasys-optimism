@@ -218,6 +218,31 @@ contract L1BuildAgent {
         return (_chainContractNames[_chainId], _chainContractAddresses[_chainId]);
     }
 
+    /**
+     * Returns the address of the Verse-Layer contract on Hub-Layer.
+     * @param _chainId Chain ID of the Verse-Layer network.
+     * @param _name Name of the Verse-Layer contract on Hub-Layer.
+     * @return address Address of the Verse-Layer contract on Hub-Layer.
+     */
+    function getNamedAddress(uint256 _chainId, string memory _name)
+        external
+        view
+        returns (address)
+    {
+        bytes32 _hash = keccak256(bytes(_name));
+
+        string[] storage names = _chainContractNames[_chainId];
+        uint256 length = names.length;
+
+        for (uint256 i = 0; i < length; i++) {
+            if (keccak256(bytes(names[i])) == _hash) {
+                return _chainContractAddresses[_chainId][i];
+            }
+        }
+
+        revert("not found");
+    }
+
     /**********************
      * Internal Functions *
      **********************/
