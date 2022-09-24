@@ -1,37 +1,31 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
-import { StateCommitmentChain } from "../../../L1/rollup/StateCommitmentChain.sol";
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+/* Library Imports */
 import { Lib_OVMCodec } from "../../../libraries/codec/Lib_OVMCodec.sol";
-import { IVerifierInfo } from "./IVerifierInfo.sol";
+import { PredeployAddresses } from "../../libraries/PredeployAddresses.sol";
+
+/* Internal Imports */
+import { StateCommitmentChain } from "../../../L1/rollup/StateCommitmentChain.sol";
 
 /**
  * @title OasysStateCommitmentChain
  * @dev The Oasys State Commitment Chain is the contract that adds verifiability by the verifier
  * to the State Commitment Chain (SCC).
  */
-contract OasysStateCommitmentChain is StateCommitmentChain, Ownable {
+contract OasysStateCommitmentChain is StateCommitmentChain {
     /**********
      * Events *
      **********/
 
-    event VerificationSucceeded(uint256 indexed _index, string _name);
-    event VerificationFailed(uint256 indexed _index, string _name);
-    event VerifiedIndex(uint256 _index);
-    event VerifierAdded(string indexed _name);
-    event VerifierRemoved(string indexed _name);
-    event ThresholdUpdated(uint256 _threshold);
+    event StateBatchVerified(uint256 indexed _batchIndex, bytes32 _batchRoot);
+    event StateBatchFailed(uint256 indexed _batchIndex, bytes32 _batchRoot);
 
     /*************
      * Variables *
      *************/
 
     uint256 public nextIndex;
-    uint256 public threshold;
-    bytes32[] public verifiers;
-    address public verifierInfo;
-    mapping(bytes32 => uint256) public verifierNextIndex;
 
     /***************
      * Constructor *
@@ -41,115 +35,50 @@ contract OasysStateCommitmentChain is StateCommitmentChain, Ownable {
      * @param _libAddressManager Address of the Address Manager.
      * @param _fraudProofWindow Fraud proof window.
      * @param _sequencerPublishWindow Sequencer publish window.
-     * @param _verifierInfo Address of the VerifierInfo.
      */
     constructor(
         address _libAddressManager,
         uint256 _fraudProofWindow,
-        uint256 _sequencerPublishWindow,
-        address _verifierInfo
-    ) StateCommitmentChain(_libAddressManager, _fraudProofWindow, _sequencerPublishWindow) {
-        verifierInfo = _verifierInfo;
-    }
+        uint256 _sequencerPublishWindow
+    ) StateCommitmentChain(_libAddressManager, _fraudProofWindow, _sequencerPublishWindow) {}
 
     /********************
      * Public Functions *
      ********************/
 
     /**
-     * Add the verifier.
-     * @param _name Verifier name.
+     * Method called by the OasysStateCommitmentChainVerifier after a verification successful.
+     * @param _batchHeader Target batch header.
      */
-    function addVerifier(string memory _name) external onlyOwner {
-        bytes32 nameHash = IVerifierInfo(verifierInfo).computeNameHash(_name);
-        require(!_contains(verifiers, nameHash), "already added");
+    function succeedVerification(Lib_OVMCodec.ChainBatchHeader memory _batchHeader) external {
+        require(msg.sender == PredeployAddresses.SCC_VERIFIER, "Invalid message sender.");
 
-        verifiers.push(nameHash);
-        verifierNextIndex[nameHash] = batches().length();
-
-        emit VerifierAdded(_name);
-    }
-
-    /**
-     * Remove the verifier.
-     * @param _name Verifier name.
-     */
-    function removeVerifier(string memory _name) external onlyOwner {
-        bytes32 nameHash = IVerifierInfo(verifierInfo).computeNameHash(_name);
-        require(_contains(verifiers, nameHash), "Verifier not contained.");
-
-        uint256 length = verifiers.length;
-        bool verifierMatched = false;
-        for (uint256 i = 0; i < length - 1; i++) {
-            if (!verifierMatched && verifiers[i] == nameHash) {
-                verifierMatched = true;
-            }
-            if (verifierMatched) {
-                verifiers[i] = verifiers[i + 1];
-            }
-        }
-        verifiers.pop();
-        if (threshold > length - 1) {
-            threshold = length - 1;
-        }
-
-        emit VerifierRemoved(_name);
-    }
-
-    /**
-     * Update the verification threshold.
-     * @param _threshold Verification threshold.
-     */
-    function updateThreshold(uint256 _threshold) external onlyOwner {
-        if (threshold == _threshold) {
-            return;
-        }
-        require(verifiers.length >= _threshold, "Verifier shortage.");
-        if (threshold == 0) {
-            nextIndex = batches().length();
-        }
-        threshold = _threshold;
-
-        emit ThresholdUpdated(_threshold);
-    }
-
-    /**
-     * Verify the state commitment by verifier.
-     * @param _verifier Verifier name.
-     * @param _batchHeader Batch header.
-     */
-    function verifyStateCommitmentByVerifier(
-        string memory _verifier,
-        bool success,
-        Lib_OVMCodec.ChainBatchHeader memory _batchHeader
-    ) external {
         require(_isValidBatchHeader(_batchHeader), "Invalid batch header.");
-        bytes32 nameHash = IVerifierInfo(verifierInfo).computeNameHash(_verifier);
-        require(
-            nameHash == IVerifierInfo(verifierInfo).getNameHash(msg.sender),
-            "Invalid verifier."
-        );
-        uint256 index = _batchHeader.batchIndex;
 
-        if (!success) {
-            require(verifierNextIndex[nameHash] <= index, "Invalid batch index.");
+        require(_batchHeader.batchIndex == nextIndex, "Invalid batch index.");
 
-            emit VerificationFailed(index, _verifier);
-        }
+        nextIndex++;
 
-        require(verifierNextIndex[nameHash] == index, "Invalid batch index.");
-        verifierNextIndex[nameHash]++;
-
-        emit VerificationSucceeded(index, _verifier);
-
-        _updateVerifiedIndex(index);
+        emit StateBatchVerified(_batchHeader.batchIndex, _batchHeader.batchRoot);
     }
 
     /**
-     * Reflesh the verified index.
+     * Method called by the OasysStateCommitmentChainVerifier after a verification failure.
+     * @param _batchHeader Target batch header.
      */
-    function refleshVerifiedIndex() external {
-        while (_updateVerifiedIndex(nextIndex)) {}
+    function failVerification(Lib_OVMCodec.ChainBatchHeader memory _batchHeader) external {
+        require(msg.sender == PredeployAddresses.SCC_VERIFIER, "Invalid message sender.");
+
+        require(_isValidBatchHeader(_batchHeader), "Invalid batch header.");
+
+        require(
+            insideFraudProofWindow(_batchHeader),
+            "State batches can only be deleted within the fraud proof window."
+        );
+
+        _deleteBatch(_batchHeader);
+
+        emit StateBatchFailed(_batchHeader.batchIndex, _batchHeader.batchRoot);
     }
 
     /**
@@ -164,9 +93,6 @@ contract OasysStateCommitmentChain is StateCommitmentChain, Ownable {
         override
         returns (bool _inside)
     {
-        if (threshold == 0) {
-            return false;
-        }
         if (_batchHeader.batchIndex < nextIndex) {
             return false;
         }
@@ -174,54 +100,5 @@ contract OasysStateCommitmentChain is StateCommitmentChain, Ownable {
 
         require(timestamp != 0, "Batch header timestamp cannot be zero");
         return (timestamp + FRAUD_PROOF_WINDOW) > block.timestamp;
-    }
-
-    /**********************
-     * Internal Functions *
-     **********************/
-
-    /**
-     * Update the verified index.
-     * @param _index Target index.
-     */
-    function _updateVerifiedIndex(uint256 _index) internal returns (bool) {
-        if (nextIndex != _index) {
-            return false;
-        }
-        uint256 verifiedCount;
-        uint256 length = verifiers.length;
-        for (uint256 i = 0; i < length; i++) {
-            if (verifierNextIndex[verifiers[i]] > _index) {
-                verifiedCount++;
-            }
-        }
-        if (verifiedCount < threshold) {
-            return false;
-        }
-        nextIndex++;
-
-        emit VerifiedIndex(_index);
-
-        return true;
-    }
-
-    /**
-     * Check if the array of verifier contains the verifier.
-     * @param _verifiers Array of verifier.
-     * @param _verifier verifier.
-     * @return Contains of not.
-     */
-    function _contains(bytes32[] memory _verifiers, bytes32 _verifier)
-        internal
-        pure
-        returns (bool)
-    {
-        uint256 length = _verifiers.length;
-        for (uint256 i = 0; i < length; i++) {
-            if (_verifiers[i] == _verifier) {
-                return true;
-            }
-        }
-        return false;
     }
 }

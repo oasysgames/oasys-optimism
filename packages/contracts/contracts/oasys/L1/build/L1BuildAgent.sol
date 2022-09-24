@@ -36,7 +36,6 @@ contract L1BuildAgent {
     /**
      * @param _paramAddress Address of the L1BuildParam contract.
      * @param _depositAddress Address of the L1BuildDeposit contract.
-     * @param _verifierInfoAddress Address of the VerifierInfo contract.
      * @param _step1Address Address of the L1BuildStep1 contract.
      * @param _step2Address Address of the L1BuildStep2 contract.
      * @param _step3Address Address of the L1BuildStep3 contract.
@@ -45,7 +44,6 @@ contract L1BuildAgent {
     constructor(
         address _paramAddress,
         address _depositAddress,
-        address _verifierInfoAddress,
         address _step1Address,
         address _step2Address,
         address _step3Address,
@@ -58,7 +56,7 @@ contract L1BuildAgent {
         step4Address = _step4Address;
         L1BuildDeposit(depositAddress).initialize(address(this));
         L1BuildStep1(step1Address).initialize(address(this), _paramAddress);
-        L1BuildStep2(step2Address).initialize(address(this), _paramAddress, _verifierInfoAddress);
+        L1BuildStep2(step2Address).initialize(address(this), _paramAddress);
         L1BuildStep3(step3Address).initialize(address(this));
         L1BuildStep4(step4Address).initialize(address(this), _paramAddress);
     }

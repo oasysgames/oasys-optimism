@@ -18,7 +18,6 @@ contract L1BuildStep2 {
 
     address public agentAddress;
     address public paramAddress;
-    address public verifierInfoAddress;
 
     /********************
      * Public Functions *
@@ -28,22 +27,11 @@ contract L1BuildStep2 {
      * Sets the addresses of the L1BuildAgent and L1BuildParam contract.
      * @param _agentAddress Address of the L1BuildAgent contract.
      * @param _paramAddress Address of the L1BuildParam contract.
-     * @param _verifierInfoAddress Address of the VerifierInfo contract.
      */
-    function initialize(
-        address _agentAddress,
-        address _paramAddress,
-        address _verifierInfoAddress
-    ) external {
-        require(
-            agentAddress == address(0) &&
-                paramAddress == address(0) &&
-                verifierInfoAddress == address(0),
-            "initialize only once"
-        );
+    function initialize(address _agentAddress, address _paramAddress) external {
+        require(agentAddress == address(0) && paramAddress == address(0), "initialize only once");
         agentAddress = _agentAddress;
         paramAddress = _paramAddress;
-        verifierInfoAddress = _verifierInfoAddress;
     }
 
     /**
@@ -58,10 +46,8 @@ contract L1BuildStep2 {
         OasysStateCommitmentChain stateCommitmentChain = new OasysStateCommitmentChain(
             addressManager,
             L1BuildParam(paramAddress).fraudProofWindow(),
-            L1BuildParam(paramAddress).sequencerPublishWindow(),
-            verifierInfoAddress
+            L1BuildParam(paramAddress).sequencerPublishWindow()
         );
-        stateCommitmentChain.transferOwnership(_builder);
 
         ChainStorageContainer sccBatches = new ChainStorageContainer(
             addressManager,
