@@ -19,6 +19,7 @@ contract OasysStateCommitmentChain is StateCommitmentChain {
      **********/
 
     event StateBatchVerified(uint256 indexed _batchIndex, bytes32 _batchRoot);
+    event StateBatchFailed(uint256 indexed _batchIndex, bytes32 _batchRoot);
 
     /*************
      * Variables *
@@ -76,6 +77,8 @@ contract OasysStateCommitmentChain is StateCommitmentChain {
         );
 
         _deleteBatch(_batchHeader);
+
+        emit StateBatchFailed(_batchHeader.batchIndex, _batchHeader.batchRoot);
     }
 
     /**

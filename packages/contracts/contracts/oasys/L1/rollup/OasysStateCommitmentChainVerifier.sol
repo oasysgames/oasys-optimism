@@ -22,14 +22,14 @@ contract OasysStateCommitmentChainVerifier {
      * Events *
      **********/
 
-    event StateBatchAccepted(
+    event StateBatchApproved(
         address indexed stateCommitmentChain,
-        uint256 batchIndex,
+        uint256 indexed batchIndex,
         bytes32 batchRoot
     );
     event StateBatchRejected(
         address indexed stateCommitmentChain,
-        uint256 batchIndex,
+        uint256 indexed batchIndex,
         bytes32 batchRoot
     );
 
@@ -38,6 +38,7 @@ contract OasysStateCommitmentChainVerifier {
      **********/
 
     error InvalidSignature(bytes signature, string reason);
+    error InvalidAddressSort(address signer);
     error OutdatedValidatorAddress(address validator);
     error StakeAmountShortage(uint256 required, uint256 verified);
 
@@ -46,130 +47,111 @@ contract OasysStateCommitmentChainVerifier {
      ********************/
 
     /**
-     * Accept the state batch.
+     * Approve the state batch.
      * @param stateCommitmentChain Address of the target OasysStateCommitmentChain.
-     * @param _batchHeader Target batch header.
+     * @param batchHeader Target batch header.
      * @param signatures List of signatures.
      */
-    function accept(
+    function approve(
         address stateCommitmentChain,
-        Lib_OVMCodec.ChainBatchHeader memory _batchHeader,
+        Lib_OVMCodec.ChainBatchHeader memory batchHeader,
         bytes[] memory signatures
     ) external {
-        verifySignatures(stateCommitmentChain, _batchHeader, true, signatures);
+        _verifySignatures(stateCommitmentChain, batchHeader, true, signatures);
 
-        OasysStateCommitmentChain(stateCommitmentChain).succeedVerification(_batchHeader);
+        OasysStateCommitmentChain(stateCommitmentChain).succeedVerification(batchHeader);
 
-        emit StateBatchAccepted(
+        emit StateBatchApproved(
             stateCommitmentChain,
-            _batchHeader.batchIndex,
-            _batchHeader.batchRoot
+            batchHeader.batchIndex,
+            batchHeader.batchRoot
         );
     }
 
     /**
      * Reject the state batch.
      * @param stateCommitmentChain Address of the target OasysStateCommitmentChain.
-     * @param _batchHeader Target batch header.
+     * @param batchHeader Target batch header.
      * @param signatures List of signatures.
      */
     function reject(
         address stateCommitmentChain,
-        Lib_OVMCodec.ChainBatchHeader memory _batchHeader,
+        Lib_OVMCodec.ChainBatchHeader memory batchHeader,
         bytes[] memory signatures
     ) external {
-        verifySignatures(stateCommitmentChain, _batchHeader, false, signatures);
+        _verifySignatures(stateCommitmentChain, batchHeader, false, signatures);
 
-        OasysStateCommitmentChain(stateCommitmentChain).failVerification(_batchHeader);
+        OasysStateCommitmentChain(stateCommitmentChain).failVerification(batchHeader);
 
         emit StateBatchRejected(
             stateCommitmentChain,
-            _batchHeader.batchIndex,
-            _batchHeader.batchRoot
+            batchHeader.batchIndex,
+            batchHeader.batchRoot
         );
-    }
-
-    /**
-     * Check if the total stake amount of verifiers exceeds 50%.
-     * @param stateCommitmentChain Address of the target OasysStateCommitmentChain.
-     * @param _batchHeader Target state.
-     * @param accepted Accept or Reject.
-     * @param signatures List of signatures.
-     */
-    function verifySignatures(
-        address stateCommitmentChain,
-        Lib_OVMCodec.ChainBatchHeader memory _batchHeader,
-        bool accepted,
-        bytes[] memory signatures
-    ) public view {
-        uint256 required = IStakeManager(PredeployAddresses.STAKE_MANAGER).getTotalStake(0);
-
-        (, uint256[] memory amounts) = getVerifiers(
-            stateCommitmentChain,
-            _batchHeader,
-            accepted,
-            signatures
-        );
-
-        uint256 verified = 0;
-        for (uint256 i = 0; i < amounts.length; i++) {
-            verified += amounts[i];
-        }
-
-        if (verified <= required / 2) {
-            revert StakeAmountShortage(required, verified);
-        }
-    }
-
-    /**
-     * Returns a list of verifier addresses and stake amounts.
-     * @param stateCommitmentChain Address of the target OasysStateCommitmentChain.
-     * @param _batchHeader Target state.
-     * @param accepted Accept or Reject.
-     * @param signatures List of signatures.
-     */
-    function getVerifiers(
-        address stateCommitmentChain,
-        Lib_OVMCodec.ChainBatchHeader memory _batchHeader,
-        bool accepted,
-        bytes[] memory signatures
-    ) public view returns (address[] memory verifiers, uint256[] memory amounts) {
-        address[] memory signers = _recoverSigners(
-            keccak256(
-                abi.encodePacked(
-                    block.chainid,
-                    stateCommitmentChain,
-                    _batchHeader.batchIndex,
-                    _batchHeader.batchRoot,
-                    accepted
-                )
-            ),
-            signatures
-        );
-
-        uint256 signersCount = signers.length;
-        verifiers = new address[](signersCount);
-        amounts = new uint256[](signersCount);
-
-        IStakeManager stakeManager = IStakeManager(PredeployAddresses.STAKE_MANAGER);
-
-        for (uint256 i = 0; i < signersCount; i++) {
-            address signedOperator = signers[i];
-            address owner = stakeManager.operatorToOwner(signedOperator);
-
-            (address currentOperator, , , uint256 stake, ) = stakeManager.getValidatorInfo(owner);
-            if (signedOperator != currentOperator) {
-                revert OutdatedValidatorAddress(owner);
-            }
-
-            verifiers[i] = owner;
-            amounts[i] = stake;
-        }
     }
 
     /**********************
      * Internal Functions *
      **********************/
+
+    /**
+     * Verify signatures.
+     * @param stateCommitmentChain Address of the target OasysStateCommitmentChain.
+     * @param batchHeader Target state.
+     * @param approved Approve or Reject.
+     * @param signatures List of signatures.
+     */
+    function _verifySignatures(
+        address stateCommitmentChain,
+        Lib_OVMCodec.ChainBatchHeader memory batchHeader,
+        bool approved,
+        bytes[] memory signatures
+    ) internal view {
+        address[] memory verifiers = _recoverSigners(
+            keccak256(
+                abi.encodePacked(
+                    block.chainid,
+                    stateCommitmentChain,
+                    batchHeader.batchIndex,
+                    batchHeader.batchRoot,
+                    approved
+                )
+            ),
+            signatures
+        );
+
+        _verifyTotalStakeOverHalf(verifiers);
+    }
+
+    /**
+     * Verify total stake is over half.
+     * @param verifiers List of verifiers.
+     */
+    function _verifyTotalStakeOverHalf(address[] memory verifiers) internal view {
+        IStakeManager stakeManager = IStakeManager(PredeployAddresses.STAKE_MANAGER);
+
+        uint256 signersCount = verifiers.length;
+        uint256 verified = 0;
+        for (uint256 i = 0; i < signersCount; i++) {
+            address signedOperator = verifiers[i];
+            address validatorOwner = stakeManager.operatorToOwner(signedOperator);
+
+            (address currentOperator, , , , uint256 stake) = stakeManager.getValidatorInfo(
+                validatorOwner,
+                0
+            );
+            if (signedOperator != currentOperator) {
+                revert OutdatedValidatorAddress(validatorOwner);
+            }
+
+            verified += stake;
+        }
+
+        uint256 required = (stakeManager.getTotalStake(0) / 100) * 51;
+        if (verified < required) {
+            revert StakeAmountShortage(required, verified);
+        }
+    }
 
     /**
      * Returns a list of addresses that signed the hashed message.
@@ -200,7 +182,9 @@ contract OasysStateCommitmentChainVerifier {
                 revert InvalidSignature(signature, "ECDSA: invalid signature 'v' value");
             }
 
-            require(signer > lastSigner, "Invalid address sort.");
+            if (signer <= lastSigner) {
+                revert InvalidAddressSort(signer);
+            }
 
             signers[i] = signer;
             lastSigner = signer;

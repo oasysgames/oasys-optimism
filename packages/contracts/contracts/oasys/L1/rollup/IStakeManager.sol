@@ -21,22 +21,23 @@ interface IStakeManager {
     function getTotalStake(uint256 epoch) external view returns (uint256 stakes);
 
     /**
-     * Returns validator information.
+     * Returns the validator information for the specified epoch.
      * @param validator Validator address.
+     * @param epoch Target epoch number.
      * @return operator Address used for block signing
      * @return active Validator status.
      * @return jailed Jailing status.
+     * @return candidate Whether new blocks can be produced.
      * @return stakes Total staked amounts.
-     * @return commissionRate Commission rates.
      */
-    function getValidatorInfo(address validator)
+    function getValidatorInfo(address validator, uint256 epoch)
         external
         view
         returns (
             address operator,
             bool active,
             bool jailed,
-            uint256 stakes,
-            uint256 commissionRate
+            bool candidate,
+            uint256 stakes
         );
 }
