@@ -71,12 +71,39 @@ contract L1StandardERC721 is
      *
      * - the caller must have the `MINTER_ROLE`.
      */
-    function mint(address to, uint32 tokenId) public virtual {
+    function mint(address to, uint256 tokenId) public virtual {
         require(
             hasRole(MINTER_ROLE, _msgSender()),
             "L1StandardERC721: must have minter role to mint"
         );
         _mint(to, tokenId);
+    }
+
+    /**
+     * Bulk mint
+     * @param tos List of receipient address.
+     * @param tokenIds List of tokenId.
+     */
+    function mint(address[] memory tos, uint256[] memory tokenIds) public virtual {
+        require(tos.length == tokenIds.length, "L1StandardERC721: bulk mint args must be equals");
+        for (uint256 i; i < tos.length; i++) {
+            mint(tos[i], tokenIds[i]);
+        }
+    }
+
+    /**
+     * Bulk transfer
+     * @param tos List of receipient address.
+     * @param tokenIds List of amount.
+     */
+    function transfer(address[] memory tos, uint256[] memory tokenIds) public virtual {
+        require(
+            tos.length == tokenIds.length,
+            "L1StandardERC721: bulk transfer args must be equals"
+        );
+        for (uint256 i; i < tos.length; i++) {
+            safeTransferFrom(_msgSender(), tos[i], tokenIds[i]);
+        }
     }
 
     /**

@@ -54,9 +54,33 @@ contract L1StandardERC20 is Context, AccessControlEnumerable, ERC20Burnable, ERC
     function mint(address to, uint256 amount) public virtual {
         require(
             hasRole(MINTER_ROLE, _msgSender()),
-            "ERC20PresetMinterPauser: must have minter role to mint"
+            "L1StandardERC20: must have minter role to mint"
         );
         _mint(to, amount);
+    }
+
+    /**
+     * Bulk mint
+     * @param tos List of receipient address.
+     * @param amounts List of amount.
+     */
+    function mint(address[] memory tos, uint256[] memory amounts) public virtual {
+        require(tos.length == amounts.length, "L1StandardERC20: bulk mint args must be equals");
+        for (uint256 i; i < tos.length; i++) {
+            mint(tos[i], amounts[i]);
+        }
+    }
+
+    /**
+     * Bulk transfer
+     * @param tos List of receipient address.
+     * @param amounts List of amount.
+     */
+    function transfer(address[] memory tos, uint256[] memory amounts) public virtual {
+        require(tos.length == amounts.length, "L1StandardERC20: bulk transfer args must be equals");
+        for (uint256 i; i < tos.length; i++) {
+            transfer(tos[i], amounts[i]);
+        }
     }
 
     /**
@@ -71,7 +95,7 @@ contract L1StandardERC20 is Context, AccessControlEnumerable, ERC20Burnable, ERC
     function pause() public virtual {
         require(
             hasRole(PAUSER_ROLE, _msgSender()),
-            "ERC20PresetMinterPauser: must have pauser role to pause"
+            "L1StandardERC20: must have pauser role to pause"
         );
         _pause();
     }
@@ -88,7 +112,7 @@ contract L1StandardERC20 is Context, AccessControlEnumerable, ERC20Burnable, ERC
     function unpause() public virtual {
         require(
             hasRole(PAUSER_ROLE, _msgSender()),
-            "ERC20PresetMinterPauser: must have pauser role to unpause"
+            "L1StandardERC20: must have pauser role to unpause"
         );
         _unpause();
     }
