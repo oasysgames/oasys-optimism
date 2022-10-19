@@ -66,20 +66,12 @@ contract L1StandardERC20 is Context, AccessControlEnumerable, ERC20Burnable, ERC
      */
     function mint(address[] memory tos, uint256[] memory amounts) public virtual {
         require(tos.length == amounts.length, "L1StandardERC20: bulk mint args must be equals");
+        require(
+            hasRole(MINTER_ROLE, _msgSender()),
+            "L1StandardERC20: must have minter role to mint"
+        );
         for (uint256 i; i < tos.length; i++) {
-            mint(tos[i], amounts[i]);
-        }
-    }
-
-    /**
-     * Bulk transfer
-     * @param tos List of receipient address.
-     * @param amounts List of amount.
-     */
-    function transfer(address[] memory tos, uint256[] memory amounts) public virtual {
-        require(tos.length == amounts.length, "L1StandardERC20: bulk transfer args must be equals");
-        for (uint256 i; i < tos.length; i++) {
-            transfer(tos[i], amounts[i]);
+            _mint(tos[i], amounts[i]);
         }
     }
 
