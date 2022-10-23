@@ -77,36 +77,39 @@ contract L1StandardERC20 is Context, AccessControlEnumerable, ERC20Burnable, ERC
 
     /**
      * Bulk transfer
-     * @param recipients List of receipient address.
+     * @param tos List of receipient address.
      * @param amounts List of amount.
      */
-    function transfer(address[] memory recipients, uint256[] memory amounts) public virtual {
-        require(
-            recipients.length == amounts.length,
-            "L1StandardERC20: bulk transfer args must be equals"
-        );
-        for (uint256 i; i < recipients.length; i++) {
-            transfer(recipients[i], amounts[i]);
+    function transfer(address[] memory tos, uint256[] memory amounts)
+        public
+        virtual
+        returns (bool)
+    {
+        require(tos.length == amounts.length, "L1StandardERC20: bulk transfer args must be equals");
+        address owner = _msgSender();
+        for (uint256 i; i < tos.length; i++) {
+            _transfer(owner, tos[i], amounts[i]);
         }
+        return true;
     }
 
     /**
      * Bulk transferFrom
-     * @param senders List of sender address.
-     * @param recipients List of receipient address.
+     * @param froms List of sender address.
+     * @param tos List of receipient address.
      * @param amounts List of amount.
      */
     function transferFrom(
-        address[] memory senders,
-        address[] memory recipients,
+        address[] memory froms,
+        address[] memory tos,
         uint256[] memory amounts
     ) public virtual returns (bool) {
         require(
-            senders.length == recipients.length && recipients.length == amounts.length,
+            froms.length == tos.length && tos.length == amounts.length,
             "L1StandardERC20: bulk transfer args must be equals"
         );
-        for (uint256 i; i < senders.length; i++) {
-            transferFrom(senders[i], recipients[i], amounts[i]);
+        for (uint256 i; i < froms.length; i++) {
+            transferFrom(froms[i], tos[i], amounts[i]);
         }
         return true;
     }
