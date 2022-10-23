@@ -96,6 +96,70 @@ contract L1StandardERC721 is
     }
 
     /**
+     * Bulk transferFrom
+     * @param froms List of receipient address.
+     * @param tos List of receipient address.
+     * @param tokenIds List of tokenId.
+     */
+    function transferFrom(
+        address[] memory froms,
+        address[] memory tos,
+        uint256[] memory tokenIds
+    ) public virtual {
+        require(
+            froms.length == tos.length && tos.length == tokenIds.length,
+            "L1StandardERC721: bulk transfer args must be equals"
+        );
+        for (uint256 i; i < froms.length; i++) {
+            transferFrom(froms[i], tos[i], tokenIds[i]);
+        }
+    }
+
+    /**
+     * Bulk safeTransferFrom
+     * @param froms List of receipient address.
+     * @param tos List of receipient address.
+     * @param tokenIds List of tokenId.
+     */
+    function safeTransferFrom(
+        address[] memory froms,
+        address[] memory tos,
+        uint256[] memory tokenIds
+    ) public virtual {
+        require(
+            froms.length == tos.length && tos.length == tokenIds.length,
+            "L1StandardERC721: bulk transfer args must be equals"
+        );
+        for (uint256 i; i < froms.length; i++) {
+            safeTransferFrom(froms[i], tos[i], tokenIds[i]);
+        }
+    }
+
+    /**
+     * Bulk safeTransferFrom with data
+     * @param froms List of receipient address.
+     * @param tos List of receipient address.
+     * @param tokenIds List of tokenId.
+     * @param dataList List of data.
+     */
+    function safeTransferFrom(
+        address[] memory froms,
+        address[] memory tos,
+        uint256[] memory tokenIds,
+        bytes[] memory dataList
+    ) public virtual {
+        require(
+            froms.length == tos.length &&
+                tos.length == tokenIds.length &&
+                tokenIds.length == dataList.length,
+            "L1StandardERC721: bulk transfer args must be equals"
+        );
+        for (uint256 i; i < froms.length; i++) {
+            safeTransferFrom(froms[i], tos[i], tokenIds[i], dataList[i]);
+        }
+    }
+
+    /**
      * @dev Pauses all token transfers.
      *
      * See {ERC721Pausable} and {Pausable-_pause}.

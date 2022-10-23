@@ -76,6 +76,42 @@ contract L1StandardERC20 is Context, AccessControlEnumerable, ERC20Burnable, ERC
     }
 
     /**
+     * Bulk transfer
+     * @param recipients List of receipient address.
+     * @param amounts List of amount.
+     */
+    function transfer(address[] memory recipients, uint256[] memory amounts) public virtual {
+        require(
+            recipients.length == amounts.length,
+            "L1StandardERC20: bulk transfer args must be equals"
+        );
+        for (uint256 i; i < recipients.length; i++) {
+            transfer(recipients[i], amounts[i]);
+        }
+    }
+
+    /**
+     * Bulk transferFrom
+     * @param senders List of sender address.
+     * @param recipients List of receipient address.
+     * @param amounts List of amount.
+     */
+    function transferFrom(
+        address[] memory senders,
+        address[] memory recipients,
+        uint256[] memory amounts
+    ) public virtual returns (bool) {
+        require(
+            senders.length == recipients.length && recipients.length == amounts.length,
+            "L1StandardERC20: bulk transfer args must be equals"
+        );
+        for (uint256 i; i < senders.length; i++) {
+            transferFrom(senders[i], recipients[i], amounts[i]);
+        }
+        return true;
+    }
+
+    /**
      * @dev Pauses all token transfers.
      *
      * See {ERC20Pausable} and {Pausable-_pause}.
