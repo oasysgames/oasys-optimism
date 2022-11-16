@@ -60,7 +60,7 @@ contract L1StandardERC721 is
         _setupRole(MINTER_ROLE, _owner);
         _setupRole(PAUSER_ROLE, _owner);
 
-        transferOwnership(_owner);
+        _transferOwnership(_owner);
     }
 
     function _baseURI() internal view virtual override returns (string memory) {
@@ -226,6 +226,14 @@ contract L1StandardERC721 is
      */
     function transferOwnership(address newOwner) public virtual {
         require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "L1StandardERC721: invalid role");
+        _transferOwnership(newOwner);
+    }
+
+    /**
+     * @dev Transfers ownership of the contract to a new account (`newOwner`).
+     * Internal function without access restriction.
+     */
+    function _transferOwnership(address newOwner) internal virtual {
         address oldOwner = owner;
         owner = newOwner;
         emit OwnershipTransferred(oldOwner, newOwner);
