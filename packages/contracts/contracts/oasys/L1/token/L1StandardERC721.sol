@@ -5,7 +5,9 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Pausable.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Context.sol";
 
 /**
@@ -26,9 +28,11 @@ import "@openzeppelin/contracts/utils/Context.sol";
 contract L1StandardERC721 is
     Context,
     AccessControlEnumerable,
+    Ownable,
     ERC721Enumerable,
     ERC721Burnable,
-    ERC721Pausable
+    ERC721Pausable,
+    ERC721URIStorage
 {
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
@@ -160,6 +164,50 @@ contract L1StandardERC721 is
     }
 
     /**
+     * setBaseURI
+     * @param baseURI base URI of NFT.
+     */
+    function setBaseURI(string memory baseURI) public virtual {
+        require(
+            hasRole(DEFAULT_ADMIN_ROLE, _msgSender()),
+            "L1StandardERC721: must have admin role to setBaseURI"
+        );
+        _baseTokenURI = baseURI;
+    }
+
+    /**
+     * setTokenURI
+     * @param tokenId NFT token ID.
+     * @param tokenURI token URI of NFT.
+     */
+    function setTokenURI(uint256 tokenId, string memory _tokenURI) public virtual {
+        require(
+            hasRole(MINTER_ROLE, _msgSender()),
+            "L1StandardERC721: must have minter role to setTokenURI"
+        );
+        _setTokenURI(tokenId, _tokenURI);
+    }
+
+    /**
+     * Bulk setTokenURI
+     * @param tokenIds List of tokenId.
+     * @param tokenURIs List of tokenURI.
+     */
+    function setTokenURI(uint256[] memory tokenIds, string[] memory tokenURIs) public virtual {
+        require(
+            tokenIds.length == tokenURIs.length,
+            "L1StandardERC721: bulk setTokenURI args must be equals"
+        );
+        require(
+            hasRole(MINTER_ROLE, _msgSender()),
+            "L1StandardERC721: must have minter role to setTokenURI"
+        );
+        for (uint256 i; i < tokenIds.length; i++) {
+            _setTokenURI(tokenIds[i], tokenURIs[i]);
+        }
+    }
+
+    /**
      * @dev Pauses all token transfers.
      *
      * See {ERC721Pausable} and {Pausable-_pause}.
@@ -191,6 +239,18 @@ contract L1StandardERC721 is
             "L1StandardERC721: must have pauser role to unpause"
         );
         _unpause();
+    }
+
+    /**
+     * Transfer Ownership
+     * @param newOwner Address of new owner.
+     */
+    function transferOwnership(address newOwner) public virtual override {
+        require(
+            hasRole(DEFAULT_ADMIN_ROLE, _msgSender()),
+            "L1StandardERC721: must have admin role to transferOwnership"
+        );
+        _transferOwnership(newOwner);
     }
 
     function _beforeTokenTransfer(
