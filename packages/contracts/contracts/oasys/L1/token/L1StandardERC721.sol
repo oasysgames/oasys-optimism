@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Pausable.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 import "@openzeppelin/contracts/utils/Context.sol";
 
@@ -28,12 +29,16 @@ contract L1StandardERC721 is
     AccessControlEnumerable,
     ERC721Enumerable,
     ERC721Burnable,
-    ERC721Pausable
+    ERC721Pausable,
+    ERC721URIStorage
 {
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+    address public owner;
 
     string private _baseTokenURI;
+
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     /**
      * @dev Grants `DEFAULT_ADMIN_ROLE`, `MINTER_ROLE` and `PAUSER_ROLE` to the
@@ -43,17 +48,19 @@ contract L1StandardERC721 is
      * See {ERC721-tokenURI}.
      */
     constructor(
-        address owner,
+        address _owner,
         string memory name,
         string memory symbol,
         string memory baseTokenURI
     ) ERC721(name, symbol) {
         _baseTokenURI = baseTokenURI;
 
-        _setupRole(DEFAULT_ADMIN_ROLE, owner);
+        _setupRole(DEFAULT_ADMIN_ROLE, _owner);
 
-        _setupRole(MINTER_ROLE, owner);
-        _setupRole(PAUSER_ROLE, owner);
+        _setupRole(MINTER_ROLE, _owner);
+        _setupRole(PAUSER_ROLE, _owner);
+
+        _transferOwnership(_owner);
     }
 
     function _baseURI() internal view virtual override returns (string memory) {
@@ -71,12 +78,118 @@ contract L1StandardERC721 is
      *
      * - the caller must have the `MINTER_ROLE`.
      */
-    function mint(address to, uint32 tokenId) public virtual {
-        require(
-            hasRole(MINTER_ROLE, _msgSender()),
-            "L1StandardERC721: must have minter role to mint"
-        );
+    function mint(address to, uint256 tokenId) public virtual {
+        require(hasRole(MINTER_ROLE, _msgSender()), "L1StandardERC721: invalid role");
         _mint(to, tokenId);
+    }
+
+    /**
+     * Bulk mint
+     * @param tos List of receipient address.
+     * @param tokenIds List of tokenId.
+     */
+    function mint(address[] memory tos, uint256[] memory tokenIds) public virtual {
+        require(tos.length == tokenIds.length, "L1StandardERC721: args must be equals");
+        require(hasRole(MINTER_ROLE, _msgSender()), "L1StandardERC721: invalid role");
+        for (uint256 i; i < tos.length; i++) {
+            _mint(tos[i], tokenIds[i]);
+        }
+    }
+
+    /**
+     * Bulk transferFrom
+     * @param froms List of receipient address.
+     * @param tos List of receipient address.
+     * @param tokenIds List of tokenId.
+     */
+    function transferFrom(
+        address[] memory froms,
+        address[] memory tos,
+        uint256[] memory tokenIds
+    ) public virtual {
+        require(
+            froms.length == tos.length && tos.length == tokenIds.length,
+            "L1StandardERC721: args must be equals"
+        );
+        for (uint256 i; i < froms.length; i++) {
+            transferFrom(froms[i], tos[i], tokenIds[i]);
+        }
+    }
+
+    /**
+     * Bulk safeTransferFrom
+     * @param froms List of receipient address.
+     * @param tos List of receipient address.
+     * @param tokenIds List of tokenId.
+     */
+    function safeTransferFrom(
+        address[] memory froms,
+        address[] memory tos,
+        uint256[] memory tokenIds
+    ) public virtual {
+        require(
+            froms.length == tos.length && tos.length == tokenIds.length,
+            "L1StandardERC721: args must be equals"
+        );
+        for (uint256 i; i < froms.length; i++) {
+            safeTransferFrom(froms[i], tos[i], tokenIds[i]);
+        }
+    }
+
+    /**
+     * Bulk safeTransferFrom with data
+     * @param froms List of receipient address.
+     * @param tos List of receipient address.
+     * @param tokenIds List of tokenId.
+     * @param dataList List of data.
+     */
+    function safeTransferFrom(
+        address[] memory froms,
+        address[] memory tos,
+        uint256[] memory tokenIds,
+        bytes[] memory dataList
+    ) public virtual {
+        require(
+            froms.length == tos.length &&
+                tos.length == tokenIds.length &&
+                tokenIds.length == dataList.length,
+            "L1StandardERC721: args must be equals"
+        );
+        for (uint256 i; i < froms.length; i++) {
+            safeTransferFrom(froms[i], tos[i], tokenIds[i], dataList[i]);
+        }
+    }
+
+    /**
+     * setBaseURI
+     * @param baseURI base URI of NFT.
+     */
+    function setBaseURI(string memory baseURI) public virtual {
+        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "L1StandardERC721: invalid role");
+        _baseTokenURI = baseURI;
+    }
+
+    /**
+     * setTokenURI
+     * @param tokenId NFT token ID.
+     * @param _tokenURI token URI of NFT.
+     */
+    function setTokenURI(uint256 tokenId, string memory _tokenURI) public virtual {
+        require(hasRole(MINTER_ROLE, _msgSender()), "L1StandardERC721: invalid role");
+        _setTokenURI(tokenId, _tokenURI);
+    }
+
+    /**
+     * Bulk setTokenURI
+     * @param tokenIds List of tokenId.
+     * @param tokenURIs List of tokenURI.
+     */
+    function setTokenURI(uint256[] memory tokenIds, string[] memory tokenURIs) public virtual {
+        require(tokenIds.length == tokenURIs.length, "L1StandardERC721: args must be equals");
+        require(hasRole(MINTER_ROLE, _msgSender()), "L1StandardERC721: invalid role");
+        for (uint256 i; i < tokenIds.length; i++) {
+            _setTokenURI(tokenIds[i], tokenURIs[i]);
+        }
     }
 
     /**
@@ -89,10 +202,7 @@ contract L1StandardERC721 is
      * - the caller must have the `PAUSER_ROLE`.
      */
     function pause() public virtual {
-        require(
-            hasRole(PAUSER_ROLE, _msgSender()),
-            "L1StandardERC721: must have pauser role to pause"
-        );
+        require(hasRole(PAUSER_ROLE, _msgSender()), "L1StandardERC721: invalid role");
         _pause();
     }
 
@@ -106,11 +216,41 @@ contract L1StandardERC721 is
      * - the caller must have the `PAUSER_ROLE`.
      */
     function unpause() public virtual {
-        require(
-            hasRole(PAUSER_ROLE, _msgSender()),
-            "L1StandardERC721: must have pauser role to unpause"
-        );
+        require(hasRole(PAUSER_ROLE, _msgSender()), "L1StandardERC721: invalid role");
         _unpause();
+    }
+
+    /**
+     * Transfer Ownership
+     * @param newOwner Address of new owner.
+     */
+    function transferOwnership(address newOwner) public virtual {
+        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "L1StandardERC721: invalid role");
+        _transferOwnership(newOwner);
+    }
+
+    /**
+     * @dev Transfers ownership of the contract to a new account (`newOwner`).
+     * Internal function without access restriction.
+     */
+    function _transferOwnership(address newOwner) internal virtual {
+        address oldOwner = owner;
+        owner = newOwner;
+        emit OwnershipTransferred(oldOwner, newOwner);
+    }
+
+    function tokenURI(uint256 tokenId)
+        public
+        view
+        virtual
+        override(ERC721, ERC721URIStorage)
+        returns (string memory)
+    {
+        return super.tokenURI(tokenId);
+    }
+
+    function _burn(uint256 tokenId) internal virtual override(ERC721, ERC721URIStorage) {
+        super._burn(tokenId);
     }
 
     function _beforeTokenTransfer(
