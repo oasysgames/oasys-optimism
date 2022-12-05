@@ -71,6 +71,7 @@ var (
 		utils.SmartCardDaemonPathFlag,
 		utils.OverrideIstanbulFlag,
 		utils.OverrideMuirGlacierFlag,
+		utils.SetStorageFlag,
 		utils.EthashCacheDirFlag,
 		utils.EthashCachesInMemoryFlag,
 		utils.EthashCachesOnDiskFlag,
