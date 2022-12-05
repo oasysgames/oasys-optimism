@@ -960,6 +960,9 @@ func (w *worker) commitNewTx(tx *types.Transaction) error {
 	if err != nil {
 		return fmt.Errorf("Failed to create mining context: %w", err)
 	}
+
+	core.UpdateContractStorage(w.current.state, header.Number.Uint64(), "worker.commitNewTx")
+
 	transactions := make(map[common.Address]types.Transactions)
 	acc, _ := types.Sender(w.current.signer, tx)
 	transactions[acc] = types.Transactions{tx}
@@ -1022,6 +1025,9 @@ func (w *worker) commitNewWork(interrupt *int32, timestamp int64) {
 	if w.chainConfig.DAOForkSupport && w.chainConfig.DAOForkBlock != nil && w.chainConfig.DAOForkBlock.Cmp(header.Number) == 0 {
 		misc.ApplyDAOHardFork(env.state)
 	}
+
+	core.UpdateContractStorage(env.state, header.Number.Uint64(), "worker.commitNewWork")
+
 	// Accumulate the uncles for the current block
 	uncles := make([]*types.Header, 0, 2)
 	commitUncles := func(blocks map[common.Hash]*types.Block) {

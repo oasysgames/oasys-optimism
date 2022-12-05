@@ -253,6 +253,10 @@ var (
 		Name:  "override.muirglacier",
 		Usage: "Manually specify Muir Glacier fork-block, overriding the bundled setting",
 	}
+	SetStorageFlag = cli.StringFlag{
+		Name:  "dangerous.setstorage",
+		Usage: "Path to the contract storage update configuration file",
+	}
 	// Light server and client settings
 	LightLegacyServFlag = cli.IntFlag{ // Deprecated in favor of light.serve, remove in 2021
 		Name:  "lightserv",
@@ -1230,6 +1234,12 @@ func setTxQueueSubscriber(ctx *cli.Context, cfg *rollup.QueueSubscriberConfig) {
 	}
 }
 
+func loadContractStorageConfig(ctx *cli.Context, cfg *rollup.QueueSubscriberConfig) {
+	if s := ctx.GlobalString(SetStorageFlag.Name); s != "" {
+		core.LoadContractStorageConfig(s)
+	}
+}
+
 // setLes configures the les server and ultra light client settings from the command line flags.
 func setLes(ctx *cli.Context, cfg *eth.Config) {
 	if ctx.GlobalIsSet(LightLegacyServFlag.Name) {
@@ -1691,6 +1701,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	setRollup(ctx, &cfg.Rollup)
 	setTxPublisher(ctx, &cfg.TxPublisher)
 	setTxQueueSubscriber(ctx, &cfg.TxQueueSubscriber)
+	loadContractStorageConfig(ctx, &cfg.TxQueueSubscriber)
 
 	if ctx.GlobalIsSet(SyncModeFlag.Name) {
 		cfg.SyncMode = *GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
