@@ -253,9 +253,10 @@ var (
 		Name:  "override.muirglacier",
 		Usage: "Manually specify Muir Glacier fork-block, overriding the bundled setting",
 	}
-	SetStorageFlag = cli.StringFlag{
-		Name:  "dangerous.setstorage",
-		Usage: "Path to the contract storage update configuration file",
+	UpdateContractFlag = cli.StringFlag{
+		Name:   "dangerous.contractupdate",
+		Usage:  "Path to the contract update configuration file",
+		EnvVar: "DANGEROUS_UPDATE_CONTRACT",
 	}
 	// Light server and client settings
 	LightLegacyServFlag = cli.IntFlag{ // Deprecated in favor of light.serve, remove in 2021
@@ -1234,9 +1235,9 @@ func setTxQueueSubscriber(ctx *cli.Context, cfg *rollup.QueueSubscriberConfig) {
 	}
 }
 
-func loadContractStorageConfig(ctx *cli.Context, cfg *rollup.QueueSubscriberConfig) {
-	if s := ctx.GlobalString(SetStorageFlag.Name); s != "" {
-		core.LoadContractStorageConfig(s)
+func loadContractUpdateConfig(ctx *cli.Context) {
+	if s := ctx.GlobalString(UpdateContractFlag.Name); s != "" {
+		core.LoadContractUpdateConfig(s)
 	}
 }
 
@@ -1701,7 +1702,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	setRollup(ctx, &cfg.Rollup)
 	setTxPublisher(ctx, &cfg.TxPublisher)
 	setTxQueueSubscriber(ctx, &cfg.TxQueueSubscriber)
-	loadContractStorageConfig(ctx, &cfg.TxQueueSubscriber)
+	loadContractUpdateConfig(ctx)
 
 	if ctx.GlobalIsSet(SyncModeFlag.Name) {
 		cfg.SyncMode = *GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
