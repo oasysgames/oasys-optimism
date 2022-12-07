@@ -68,7 +68,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		misc.ApplyDAOHardFork(statedb)
 	}
 
-	UpdateContractStorage(statedb, block.Number().Uint64(), "StateProcessor.Process")
+	UpdateContract(statedb, block.Number().Uint64(), "StateProcessor.Process")
 
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {

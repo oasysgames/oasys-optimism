@@ -208,7 +208,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			misc.ApplyDAOHardFork(statedb)
 		}
 
-		UpdateContractStorage(statedb, b.header.Number.Uint64(), "GenerateChain")
+		UpdateContract(statedb, b.header.Number.Uint64(), "GenerateChain")
 
 		// Execute any user modifications to the block
 		if gen != nil {
