@@ -1,9 +1,10 @@
 /* Imports: External */
 import path from 'path'
 import fs from 'fs'
+
 import mkdirp from 'mkdirp'
 import { ethers, utils } from 'ethers'
-import { task, subtask } from 'hardhat/config'
+import { task } from 'hardhat/config'
 import * as types from 'hardhat/internal/core/params/argumentTypes'
 import { HardhatRuntimeEnvironment } from 'hardhat/types'
 
@@ -17,7 +18,6 @@ const descriptions = {
   chainid: 'Chain id of Verse-Layer(L2).',
   sequencer: 'Address of the OVM Sequencer.',
   proposer: 'Address of the OVM Proposer.',
-  blockSigner: 'The block signer address.',
   feeWallet: 'The L1 fee wallet address.',
   gpoOwner: 'Address of the GasPriceOracle owner.',
   whitelistOwner: 'Address of OVM Whitelist owner.',
@@ -75,7 +75,7 @@ task('verse:deposit', 'Deposits the OAS token for the Verse-Builder')
 
     const L1BuildDeposit = await getL1BuildDeposit(hre)
 
-    let tx = await L1BuildDeposit.deposit(builder, {
+    const tx = await L1BuildDeposit.deposit(builder, {
       value: amount,
     })
     stdout.write(`depositing (tx: ${tx.hash})...`)
@@ -91,7 +91,6 @@ task(
   .addParam('chainId', descriptions.chainid, undefined, types.int)
   .addParam('sequencer', descriptions.sequencer, undefined, types.string)
   .addParam('proposer', descriptions.proposer, undefined, types.string)
-  .addParam('blockSigner', descriptions.blockSigner, undefined, types.string)
   .addParam('feeWallet', descriptions.feeWallet, undefined, types.string)
   .addParam('gpoOwner', descriptions.gpoOwner, undefined, types.string)
   .addOptionalParam(
@@ -102,15 +101,7 @@ task(
   )
   .setAction(
     async (
-      {
-        chainId,
-        sequencer,
-        proposer,
-        blockSigner,
-        feeWallet,
-        gpoOwner,
-        whitelistOwner,
-      },
+      { chainId, sequencer, proposer, feeWallet, gpoOwner, whitelistOwner },
       hre
     ) => {
       validateSequencerAndProposer(sequencer, proposer)
@@ -131,12 +122,11 @@ task(
         console.log('already built')
       }
 
-      await hre.run('verse:addresses', { chainId })
-      await hre.run('verse:genesis', {
+      await hre.run('verse:create-addresses-json', { chainId })
+      await hre.run('verse:create-genesis-json', {
         chainId,
         sequencer,
         proposer,
-        blockSigner,
         feeWallet,
         gpoOwner,
         whitelistOwner,
@@ -147,7 +137,7 @@ task(
 /**
  * Create contract address list for Hub-Layer(L1) contracts.
  */
-subtask('verse:addresses')
+task('verse:create-addresses-json')
   .addParam('chainId', descriptions.chainid, undefined, types.int)
   .setAction(async ({ chainId }, hre) => {
     mkdirp.sync(outdir)
@@ -163,11 +153,10 @@ subtask('verse:addresses')
 /**
  * Create genesis block configuration for Verse-Layer(L2).
  */
-subtask('verse:genesis')
+task('verse:create-genesis-json')
   .addParam('chainId', descriptions.chainid, undefined, types.int)
   .addParam('sequencer', descriptions.sequencer, undefined, types.string)
   .addParam('proposer', descriptions.proposer, undefined, types.string)
-  .addParam('blockSigner', descriptions.blockSigner, undefined, types.string)
   .addParam('feeWallet', descriptions.feeWallet, undefined, types.string)
   .addParam('gpoOwner', descriptions.gpoOwner, undefined, types.string)
   .addOptionalParam(
@@ -178,22 +167,18 @@ subtask('verse:genesis')
   )
   .setAction(
     async (
-      {
-        chainId,
-        sequencer,
-        proposer,
-        blockSigner,
-        feeWallet,
-        gpoOwner,
-        whitelistOwner,
-      },
+      { chainId, sequencer, proposer, feeWallet, gpoOwner, whitelistOwner },
       hre
     ) => {
       validateSequencerAndProposer(sequencer, proposer)
-      validateAddress(blockSigner, 'BlockSigner')
       validateAddress(feeWallet, 'FeeWallet')
       validateAddress(gpoOwner, 'GasPriceOracle owner')
       validateAddress(whitelistOwner, 'Whitelist owner')
+
+      const blockSigner =
+        ~~(await hre.getChainId()) === 248
+          ? '0x7e5FD4a3F5D98622de73bCf8af704b7f03BE7Ba1' // mainnet: https://github.com/oasysgames/verse-layer-optimism/blob/main/.env.sample.mainnet#L16
+          : '0x4ce8f72fA55251E39B995F34b121fDfe5E1698bF' // testnet: https://github.com/oasysgames/verse-layer-optimism/blob/main/.env.sample.testnet#L16
 
       const config = `import { DeployConfig } from '../src/deploy-config'
 const config: DeployConfig = {
