@@ -13,8 +13,6 @@ import { NON_NULL_BYTES32 } from '../../../../helpers'
 
 chai.use(smock.matchers)
 
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
-
 const toWei = web3.utils.toWei
 
 const batchHeader = {
@@ -26,12 +24,38 @@ const batchHeader = {
 } as const
 
 describe('OasysStateCommitmentChainVerifier', () => {
+  let verifiers: [Account, string][] // owner, operator, stake
+  let operator1: Account
+  let operator2: Account
+  let operator3: Account
+  before(async () => {
+    const signers = await ethers.getSigners()
+    verifiers = [
+      [signers[2], toWei('1000')],
+      [signers[4], toWei('2000')],
+      [signers[6], toWei('4000')],
+    ]
+    ;[operator1, operator2, operator3] = verifiers.map((x) => x[0])
+  })
+
   let OasysSccVerifier: Contract
   before(async () => {
     const factory = await ethers.getContractFactory(
       'OasysStateCommitmentChainVerifier'
     )
     OasysSccVerifier = await factory.deploy()
+  })
+
+  let Fake__Environment: FakeContract
+  before(async () => {
+    const address = '0x0000000000000000000000000000000000001000'
+
+    // write fake bytecode.
+    await network.provider.send('hardhat_setCode', [address, '0xff'])
+    Fake__Environment = await smock.fake<Contract>(
+      await ethers.getContractAt('IEnvironment', address),
+      { address }
+    )
   })
 
   let Fake__StakeManager: FakeContract
@@ -48,46 +72,26 @@ describe('OasysStateCommitmentChainVerifier', () => {
 
   let Fake__OasysStateCommitmentChain: FakeContract
   let sccAddress: string
-  let verifiers: [Account, Account, string][] // owner, operator, stake
-  let operator1: Account
-  let operator2: Account
-  let operator3: Account
   before(async () => {
     Fake__OasysStateCommitmentChain = await smock.fake<Contract>(
       await ethers.getContractFactory('OasysStateCommitmentChain')
     )
     sccAddress = Fake__OasysStateCommitmentChain.address
-
-    const signers = await ethers.getSigners()
-    verifiers = [
-      [signers[1], signers[2], toWei('1000')],
-      [signers[3], signers[4], toWei('2000')],
-      [signers[5], signers[6], toWei('4000')],
-    ]
-    ;[operator1, operator2, operator3] = verifiers.map((x) => x[1])
   })
 
   beforeEach(async () => {
-    Fake__StakeManager.getValidatorInfo.returns(
-      (params: { validator: string; epoch: BigNumber }) => {
+    Fake__Environment.epoch.returns(() => 1234)
+
+    Fake__StakeManager.getOperatorStakes.returns(
+      (params: { operator: string; epoch: BigNumber }) => {
         const find = verifiers.find(
           (x) =>
-            x[0].address === params.validator && params.epoch.toNumber() === 0
+            x[0].address === params.operator && params.epoch.toNumber() === 1234
         )
         if (find) {
-          return [find[1].address, true, true, true, find[2]]
+          return find[1]
         }
-        return [ZERO_ADDRESS, false, false, false, '0']
-      }
-    )
-
-    Fake__StakeManager.operatorToOwner.returns(
-      (params: { operator: string }) => {
-        const find = verifiers.find((x) => x[1].address === params.operator)
-        if (find) {
-          return find[0].address
-        }
-        return ZERO_ADDRESS
+        return '0'
       }
     )
   })
@@ -167,20 +171,6 @@ describe('OasysStateCommitmentChainVerifier', () => {
       const signatures = await makeSignatures([operator1, operator1], true)
       const tx = OasysSccVerifier.approve(sccAddress, batchHeader, signatures)
       await expect(tx).to.be.revertedWith('InvalidAddressSort')
-    })
-
-    it('should be reverted by `OutdatedValidatorAddress`', async () => {
-      Fake__StakeManager.getValidatorInfo.returns([
-        ZERO_ADDRESS,
-        false,
-        false,
-        '0',
-        '0',
-      ])
-
-      const signatures = await makeSignatures([operator1], true)
-      const tx = OasysSccVerifier.approve(sccAddress, batchHeader, signatures)
-      await expect(tx).to.be.revertedWith('OutdatedValidatorAddress')
     })
 
     it('should be reverted by `StakeAmountShortage`', async () => {
