@@ -5,6 +5,7 @@ pragma solidity ^0.8.9;
 import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 /* Interface Imports */
+import { IEnvironment } from "./IEnvironment.sol";
 import { IStakeManager } from "./IStakeManager.sol";
 import { OasysStateCommitmentChain } from "./OasysStateCommitmentChain.sol";
 
@@ -39,7 +40,6 @@ contract OasysStateCommitmentChainVerifier {
 
     error InvalidSignature(bytes signature, string reason);
     error InvalidAddressSort(address signer);
-    error OutdatedValidatorAddress(address validator);
     error StakeAmountShortage(uint256 required, uint256 verified);
 
     /********************
@@ -128,26 +128,17 @@ contract OasysStateCommitmentChainVerifier {
      * @param verifiers List of verifiers.
      */
     function _verifyTotalStakeOverHalf(address[] memory verifiers) internal view {
+        IEnvironment environment = IEnvironment(PredeployAddresses.ENVIRONMENT);
         IStakeManager stakeManager = IStakeManager(PredeployAddresses.STAKE_MANAGER);
 
+        uint256 epoch = environment.epoch();
         uint256 signersCount = verifiers.length;
         uint256 verified = 0;
         for (uint256 i = 0; i < signersCount; i++) {
-            address signedOperator = verifiers[i];
-            address validatorOwner = stakeManager.operatorToOwner(signedOperator);
-
-            (address currentOperator, , , , uint256 stake) = stakeManager.getValidatorInfo(
-                validatorOwner,
-                0
-            );
-            if (signedOperator != currentOperator) {
-                revert OutdatedValidatorAddress(validatorOwner);
-            }
-
-            verified += stake;
+            verified += stakeManager.getOperatorStakes(verifiers[i], epoch);
         }
 
-        uint256 required = (stakeManager.getTotalStake(0) / 100) * 51;
+        uint256 required = (stakeManager.getTotalStake(epoch) * 51) / 100;
         if (verified < required) {
             revert StakeAmountShortage(required, verified);
         }
