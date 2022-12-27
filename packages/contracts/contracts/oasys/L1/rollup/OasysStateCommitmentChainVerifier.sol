@@ -138,7 +138,7 @@ contract OasysStateCommitmentChainVerifier {
             verified += stakeManager.getOperatorStakes(verifiers[i], epoch);
         }
 
-        uint256 required = (stakeManager.getTotalStake(epoch) / 100) * 51;
+        uint256 required = (stakeManager.getTotalStake(epoch) * 51) / 100;
         if (verified < required) {
             revert StakeAmountShortage(required, verified);
         }
