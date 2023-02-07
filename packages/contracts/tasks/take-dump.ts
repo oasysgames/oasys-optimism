@@ -8,12 +8,12 @@ import { ethers } from 'ethers'
 import { task } from 'hardhat/config'
 import * as types from 'hardhat/internal/core/params/argumentTypes'
 import { remove0x } from '@eth-optimism/core-utils'
+import { isAddress } from 'ethers/lib/utils'
 
 import { predeploys } from '../src/predeploys'
 import { getContractFromArtifact } from '../src/deploy-utils'
 import { getDeployConfig } from '../src/deploy-config'
 import { names } from '../src/address-names'
-import { isAddress } from 'ethers/lib/utils'
 
 task('take-dump')
   .addOptionalParam(
@@ -105,11 +105,11 @@ task('take-dump')
         OVM_SequencerFeeVault: {
           l1FeeWallet: deployConfig.ovmFeeWalletAddress,
         },
-        OVM_ETH: {
+        OVM_OAS: {
           l2Bridge: predeploys.L2StandardBridge,
           l1Token: ethers.constants.AddressZero,
-          _name: 'Ether',
-          _symbol: 'ETH',
+          _name: 'OAS',
+          _symbol: 'OAS',
         },
         L2CrossDomainMessenger: {
           // We default the xDomainMsgSender to this value to save gas.
