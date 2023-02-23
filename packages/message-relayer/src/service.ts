@@ -13,6 +13,7 @@ import {
   DEFAULT_L2_CONTRACT_ADDRESSES,
   MessageStatus,
   OEContractsLike,
+  CrossChainMessage,
 } from '@eth-optimism/sdk'
 import { Provider } from '@ethersproject/abstract-provider'
 
@@ -28,6 +29,8 @@ type MessageRelayerOptions = {
   canonicalTransactionChain?: string
   bondManager?: string
   pollInterval?: number
+  receiptTimeout?: number
+  gasMultiplier?: number
 }
 
 type MessageRelayerMetrics = {
@@ -99,6 +102,16 @@ export class MessageRelayerService extends BaseServiceV2<
           desc: 'Polling interval of StateCommitmentChain (unit: msec).',
           default: 1000,
         },
+        receiptTimeout: {
+          validator: validators.num,
+          desc: 'Receipt wait timeout for relay transaction (unit: msec).',
+          default: 15000,
+        },
+        gasMultiplier: {
+          validator: validators.num,
+          desc: 'Gas limit multiplier.',
+          default: 1.1,
+        },
       },
       metricsSpec: {
         highestCheckedL2Tx: {
@@ -160,6 +173,11 @@ export class MessageRelayerService extends BaseServiceV2<
     this.state.highestCheckedL2Tx = this.options.fromL2TransactionIndex || 1
     this.state.highestKnownL2Tx =
       await this.state.messenger.l2Provider.getBlockNumber()
+  }
+
+  protected async estimateGas(message: CrossChainMessage): Promise<number> {
+    const gas = await this.state.messenger.estimateGas.finalizeMessage(message)
+    return ~~(gas.toNumber() * (this.options.gasMultiplier || 1.0))
   }
 
   protected async main(): Promise<void> {
@@ -242,7 +260,9 @@ export class MessageRelayerService extends BaseServiceV2<
     // each message to L1.
     for (const message of messages) {
       try {
-        const tx = await this.state.messenger.finalizeMessage(message)
+        const tx = await this.state.messenger.finalizeMessage(message, {
+          overrides: { gasLimit: await this.estimateGas(message) },
+        })
         this.logger.info(`relayer sent tx: ${tx.hash}`)
         this.metrics.numRelayedMessages.inc()
       } catch (err) {
@@ -252,7 +272,11 @@ export class MessageRelayerService extends BaseServiceV2<
           throw err
         }
       }
-      await this.state.messenger.waitForMessageReceipt(message)
+
+      await this.state.messenger.waitForMessageReceipt(message, {
+        pollIntervalMs: this.options.pollInterval,
+        timeoutMs: this.options.receiptTimeout,
+      })
     }
 
     // All messages have been relayed so we can move on to the next block.
