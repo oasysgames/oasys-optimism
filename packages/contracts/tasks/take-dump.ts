@@ -142,6 +142,10 @@ task('take-dump')
 
       const dump = {}
       for (const predeployName of Object.keys(predeploys)) {
+        if (predeployName === 'OVM_ETH') {
+          continue
+        }
+
         const predeployAddress = predeploys[predeployName]
         dump[predeployAddress] = {
           balance: '00',
