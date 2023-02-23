@@ -19,6 +19,7 @@ export const predeploys = {
 
   // We're temporarily disabling OVM_OAS because the jury is still out on whether or not OAS as an
   // ERC20 is desirable.
+  OVM_ETH: '0xDeadDeAddeAddEAddeadDEaDDEAdDeaDDeAD0000',
   OVM_OAS: '0xDeadDeAddeAddEAddeadDEaDDEAdDeaDDeAD0000',
 
   // We're also putting WETH9 at the old OVM_ETH address.
