@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/ethereum-optimism/optimism/go/batch-submitter/bindings/ctc"
 	"github.com/ethereum-optimism/optimism/go/batch-submitter/bindings/scc"
@@ -28,16 +29,17 @@ const stateRootSize = 32
 var bigOne = new(big.Int).SetUint64(1) //nolint:unused
 
 type Config struct {
-	Name                 string
-	L1Client             *ethclient.Client
-	L2Client             *l2ethclient.Client
-	BlockOffset          uint64
-	MaxStateRootElements uint64
-	MinStateRootElements uint64
-	SCCAddr              common.Address
-	CTCAddr              common.Address
-	ChainID              *big.Int
-	PrivKey              *ecdsa.PrivateKey
+	Name                   string
+	L1Client               *ethclient.Client
+	L2Client               *l2ethclient.Client
+	BlockOffset            uint64
+	MaxStateRootElements   uint64
+	MinStateRootElements   uint64
+	MaxBatchSubmissionTime time.Duration
+	SCCAddr                common.Address
+	CTCAddr                common.Address
+	ChainID                *big.Int
+	PrivKey                *ecdsa.PrivateKey
 }
 
 type Driver struct {
@@ -182,12 +184,22 @@ func (d *Driver) CraftBatchTx(
 	}
 
 	// Abort if we don't have enough state roots to meet our minimum
-	// requirement.
+	// requirement or maximum wait time is not exceeded.
 	if uint64(len(stateRoots)) < d.cfg.MinStateRootElements {
-		log.Info(name+" number of state roots  below minimum",
+		exceeded, last, err := d.checkExceededMaxWaitTime(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !exceeded {
+			log.Info(name+" number of state roots below minimum",
+				"num_state_roots", len(stateRoots),
+				"min_state_roots", d.cfg.MinStateRootElements)
+			return nil, nil
+		}
+		log.Info(name+" number of state roots below minimum but exceeds maximum wait time",
 			"num_state_roots", len(stateRoots),
-			"min_state_roots", d.cfg.MinStateRootElements)
-		return nil, nil
+			"min_state_roots", d.cfg.MinStateRootElements,
+			"last_timestamp", last)
 	}
 
 	d.metrics.NumElementsPerBatch().Observe(float64(len(stateRoots)))
@@ -281,4 +293,18 @@ func (d *Driver) SendTransaction(
 	tx *types.Transaction,
 ) error {
 	return d.cfg.L1Client.SendTransaction(ctx, tx)
+}
+
+// Check if the maximum wait time has been exceeded since the proposer last rollup.
+func (d *Driver) checkExceededMaxWaitTime(
+	ctx context.Context,
+) (exceeded bool, last time.Time, err error) {
+	ts, err := d.sccContract.GetLastSequencerTimestamp(&bind.CallOpts{Context: ctx})
+	if err != nil {
+		return false, time.Time{}, err
+	}
+
+	last = time.Unix(ts.Int64(), 0)
+	maxWait := last.Add(d.cfg.MaxBatchSubmissionTime)
+	return time.Now().After(maxWait), last, nil
 }
