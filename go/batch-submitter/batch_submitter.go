@@ -121,16 +121,17 @@ func Main(gitVersion string) func(ctx *cli.Context) error {
 		var services []*bsscore.Service
 		if cfg.RunTxBatchSubmitter {
 			batchTxDriver, err := sequencer.NewDriver(sequencer.Config{
-				Name:        "Sequencer",
-				L1Client:    l1Client,
-				L2Client:    l2Client,
-				BlockOffset: cfg.BlockOffset,
-				MinTxSize:   cfg.MinL1TxSize,
-				MaxTxSize:   cfg.MaxL1TxSize,
-				CTCAddr:     ctcAddress,
-				ChainID:     chainID,
-				PrivKey:     sequencerPrivKey,
-				BatchType:   sequencer.BatchTypeFromString(cfg.SequencerBatchType),
+				Name:                   "Sequencer",
+				L1Client:               l1Client,
+				L2Client:               l2Client,
+				BlockOffset:            cfg.BlockOffset,
+				MinTxSize:              cfg.MinL1TxSize,
+				MaxTxSize:              cfg.MaxL1TxSize,
+				MaxBatchSubmissionTime: cfg.MaxBatchSubmissionTime,
+				CTCAddr:                ctcAddress,
+				ChainID:                chainID,
+				PrivKey:                sequencerPrivKey,
+				BatchType:              sequencer.BatchTypeFromString(cfg.SequencerBatchType),
 			})
 			if err != nil {
 				return err
@@ -148,16 +149,17 @@ func Main(gitVersion string) func(ctx *cli.Context) error {
 
 		if cfg.RunStateBatchSubmitter {
 			batchStateDriver, err := proposer.NewDriver(proposer.Config{
-				Name:                 "Proposer",
-				L1Client:             l1Client,
-				L2Client:             l2Client,
-				BlockOffset:          cfg.BlockOffset,
-				MinStateRootElements: cfg.MinStateRootElements,
-				MaxStateRootElements: cfg.MaxStateRootElements,
-				SCCAddr:              sccAddress,
-				CTCAddr:              ctcAddress,
-				ChainID:              chainID,
-				PrivKey:              proposerPrivKey,
+				Name:                   "Proposer",
+				L1Client:               l1Client,
+				L2Client:               l2Client,
+				BlockOffset:            cfg.BlockOffset,
+				MinStateRootElements:   cfg.MinStateRootElements,
+				MaxStateRootElements:   cfg.MaxStateRootElements,
+				MaxBatchSubmissionTime: cfg.MaxBatchSubmissionTime,
+				SCCAddr:                sccAddress,
+				CTCAddr:                ctcAddress,
+				ChainID:                chainID,
+				PrivKey:                proposerPrivKey,
 			})
 			if err != nil {
 				return err

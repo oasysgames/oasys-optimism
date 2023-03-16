@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/ethereum-optimism/optimism/go/batch-submitter/bindings/ctc"
 	"github.com/ethereum-optimism/optimism/go/bss-core/drivers"
@@ -29,16 +30,17 @@ const (
 var bigOne = new(big.Int).SetUint64(1)
 
 type Config struct {
-	Name        string
-	L1Client    *ethclient.Client
-	L2Client    *l2ethclient.Client
-	BlockOffset uint64
-	MinTxSize   uint64
-	MaxTxSize   uint64
-	CTCAddr     common.Address
-	ChainID     *big.Int
-	PrivKey     *ecdsa.PrivateKey
-	BatchType   BatchType
+	Name                   string
+	L1Client               *ethclient.Client
+	L2Client               *l2ethclient.Client
+	BlockOffset            uint64
+	MinTxSize              uint64
+	MaxTxSize              uint64
+	MaxBatchSubmissionTime time.Duration
+	CTCAddr                common.Address
+	ChainID                *big.Int
+	PrivKey                *ecdsa.PrivateKey
+	BatchType              BatchType
 }
 
 type Driver struct {
@@ -229,11 +231,22 @@ func (d *Driver) CraftBatchTx(
 			pruneCount++
 			continue
 		} else if plaintextCalldataSize < d.cfg.MinTxSize {
-			log.Info(name+" batch tx size below minimum",
+			exceeded, last, err := d.checkExceededMaxWaitTime(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if !exceeded {
+				log.Info(name+" batch tx size below minimum",
+					"plaintext_size", plaintextCalldataSize,
+					"min_tx_size", d.cfg.MinTxSize,
+					"num_txs", len(batchElements))
+				return nil, nil
+			}
+			log.Info(name+" batch tx size below minimum but exceeds maximum wait time",
 				"plaintext_size", plaintextCalldataSize,
 				"min_tx_size", d.cfg.MinTxSize,
-				"num_txs", len(batchElements))
-			return nil, nil
+				"num_txs", len(batchElements),
+				"last_timestamp", last)
 		}
 
 		d.metrics.NumElementsPerBatch().Observe(float64(len(batchElements)))
@@ -356,4 +369,18 @@ func (d *Driver) SendTransaction(
 	tx *types.Transaction,
 ) error {
 	return d.cfg.L1Client.SendTransaction(ctx, tx)
+}
+
+// Check if the maximum wait time has been exceeded since the sequencer last rollup.
+func (d *Driver) checkExceededMaxWaitTime(
+	ctx context.Context,
+) (exceeded bool, last time.Time, err error) {
+	ts, err := d.ctcContract.GetLastTimestamp(&bind.CallOpts{Context: ctx})
+	if err != nil {
+		return false, time.Time{}, err
+	}
+
+	last = time.Unix(ts.Int64(), 0)
+	maxWait := last.Add(d.cfg.MaxBatchSubmissionTime)
+	return time.Now().After(maxWait), last, nil
 }
