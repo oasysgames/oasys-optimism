@@ -51,9 +51,12 @@ describe('L1BuildAgent', () => {
 
   describe('build()', () => {
     it('normally', async () => {
-      await l1BuildAgent
+      const tx = await l1BuildAgent
         .connect(builders[0])
         .build(chainID, sequencer, proposer)
+      await expect(tx)
+        .to.emit(l1BuildAgent, 'Build')
+        .withArgs(builders[0].address, chainID)
     })
 
     it('already built', async () => {
