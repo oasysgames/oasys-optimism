@@ -30,7 +30,7 @@ type MessageRelayerOptions = {
   stateCommitmentChain?: string
   canonicalTransactionChain?: string
   bondManager?: string
-  multicall2?: string
+  isMulticall?: string
   pollInterval?: number
   receiptTimeout?: number
   gasMultiplier?: number
@@ -106,9 +106,9 @@ export class MessageRelayerService extends BaseServiceV2<
           validator: validators.str,
           desc: 'Address of the BondManager on Layer1.',
         },
-        multicall2: {
+        isMulticall: {
           validator: validators.str,
-          desc: 'Address of the Multicall2 on Layer1.',
+          desc: 'Whether use multicall contract when the relay.',
         },
         pollInterval: {
           validator: validators.num,
@@ -183,9 +183,11 @@ export class MessageRelayerService extends BaseServiceV2<
       contracts,
     })
 
-    if (this.options.multicall2) {
+    if (this.options.isMulticall) {
+      const multicall2ContractAddress =
+        '0x5200000000000000000000000000000000000022'
       this.state.multicall2Contract = new Contract(
-        this.options.multicall2,
+        multicall2ContractAddress,
         Multicall2.abi,
         this.state.wallet
       )
@@ -285,7 +287,7 @@ export class MessageRelayerService extends BaseServiceV2<
         const finalizeMessageCalldata =
           await this.state.messenger.getFinalizeMessageCalldata(message)
         calldataArray.push({
-          target: this.options.multicall2,
+          target: this.state.multicall2Contract.address,
           callData: finalizeMessageCalldata,
         })
       }
