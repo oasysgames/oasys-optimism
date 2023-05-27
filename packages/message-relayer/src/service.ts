@@ -50,6 +50,11 @@ type MessageRelayerState = {
   highestKnownL2Tx: number
 }
 
+type Call = {
+  target: string
+  callData: string
+}
+
 export class MessageRelayerService extends BaseServiceV2<
   MessageRelayerOptions,
   MessageRelayerMetrics,
@@ -274,25 +279,41 @@ export class MessageRelayerService extends BaseServiceV2<
 
     // If we got here then all messages in the transaction are finalized. Now we can relay
     // each message to L1.
-    for (const message of messages) {
-      try {
-        const tx = await this.state.messenger.finalizeMessage(message, {
-          overrides: { gasLimit: await this.estimateGas(message) },
+    if (this.state.multicall2Contract) {
+      const calldataArray: Call[] = []
+      for (const message of messages) {
+        const finalizeMessageCalldata =
+          await this.state.messenger.getFinalizeMessageCalldata(message)
+        calldataArray.push({
+          target: this.options.multicall2,
+          callData: finalizeMessageCalldata,
         })
-        this.logger.info(`relayer sent tx: ${tx.hash}`)
-        this.metrics.numRelayedMessages.inc()
-      } catch (err) {
-        if (err.message.includes('message has already been received')) {
-          // It's fine, the message was relayed by someone else
-        } else {
-          throw err
-        }
       }
+      const tx = await this.state.multicall2Contract.aggregate(calldataArray)
+      await tx.wait()
+      this.logger.info(`relayer sent multicall: ${tx.hash}`)
+      this.metrics.numRelayedMessages.inc(messages.length)
+    } else {
+      for (const message of messages) {
+        try {
+          const tx = await this.state.messenger.finalizeMessage(message, {
+            overrides: { gasLimit: await this.estimateGas(message) },
+          })
+          this.logger.info(`relayer sent tx: ${tx.hash}`)
+          this.metrics.numRelayedMessages.inc()
+        } catch (err) {
+          if (err.message.includes('message has already been received')) {
+            // It's fine, the message was relayed by someone else
+          } else {
+            throw err
+          }
+        }
 
-      await this.state.messenger.waitForMessageReceipt(message, {
-        pollIntervalMs: this.options.pollInterval,
-        timeoutMs: this.options.receiptTimeout,
-      })
+        await this.state.messenger.waitForMessageReceipt(message, {
+          pollIntervalMs: this.options.pollInterval,
+          timeoutMs: this.options.receiptTimeout,
+        })
+      }
     }
 
     // All messages have been relayed so we can move on to the next block.
