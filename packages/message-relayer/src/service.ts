@@ -1,5 +1,5 @@
 /* Imports: External */
-import { Signer } from 'ethers'
+import { Contract, Signer } from 'ethers'
 import { sleep } from '@eth-optimism/core-utils'
 import {
   BaseServiceV2,
@@ -17,6 +17,8 @@ import {
 } from '@eth-optimism/sdk'
 import { Provider } from '@ethersproject/abstract-provider'
 
+import Multicall2 from './contracts/Multicall2.json'
+
 type MessageRelayerOptions = {
   l1RpcProvider: Provider
   l2RpcProvider: Provider
@@ -28,6 +30,7 @@ type MessageRelayerOptions = {
   stateCommitmentChain?: string
   canonicalTransactionChain?: string
   bondManager?: string
+  multicall2?: string
   pollInterval?: number
   receiptTimeout?: number
   gasMultiplier?: number
@@ -42,6 +45,7 @@ type MessageRelayerMetrics = {
 type MessageRelayerState = {
   wallet: Signer
   messenger: CrossChainMessenger
+  multicall2Contract?: Contract
   highestCheckedL2Tx: number
   highestKnownL2Tx: number
 }
@@ -96,6 +100,10 @@ export class MessageRelayerService extends BaseServiceV2<
         bondManager: {
           validator: validators.str,
           desc: 'Address of the BondManager on Layer1.',
+        },
+        multicall2: {
+          validator: validators.str,
+          desc: 'Address of the Multicall2 on Layer1.',
         },
         pollInterval: {
           validator: validators.num,
@@ -169,6 +177,14 @@ export class MessageRelayerService extends BaseServiceV2<
       l1ChainId,
       contracts,
     })
+
+    if (this.options.multicall2) {
+      this.state.multicall2Contract = new Contract(
+        this.options.multicall2,
+        Multicall2.abi,
+        this.state.wallet
+      )
+    }
 
     this.state.highestCheckedL2Tx = this.options.fromL2TransactionIndex || 1
     this.state.highestKnownL2Tx =
