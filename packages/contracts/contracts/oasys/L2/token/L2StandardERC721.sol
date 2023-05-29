@@ -48,6 +48,7 @@ contract L2StandardERC721 is IL2StandardERC721, ERC721, ERC721Enumerable {
     }
 
     function burn(address _from, uint256 _tokenId) public virtual onlyL2Bridge {
+        require(ownerOf(_tokenId) == _from, "Not owner of the token");
         _burn(_tokenId);
 
         emit L2BridgeBurn(_from, _tokenId);
