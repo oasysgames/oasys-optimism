@@ -281,13 +281,13 @@ export class MessageRelayerService extends BaseServiceV2<
 
     // If we got here then all messages in the transaction are finalized. Now we can relay
     // each message to L1.
-    if (this.state.multicall2Contract) {
+    if (this.state.multicall2Contract && this.options.l1CrossDomainMessenger) {
       const calldataArray: Call[] = []
       for (const message of messages) {
         const finalizeMessageCalldata =
           await this.state.messenger.getFinalizeMessageCalldata(message)
         calldataArray.push({
-          target: this.state.multicall2Contract.address,
+          target: this.options.l1CrossDomainMessenger,
           callData: finalizeMessageCalldata,
         })
       }
