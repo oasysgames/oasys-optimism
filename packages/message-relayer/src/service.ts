@@ -251,6 +251,7 @@ export class MessageRelayerService extends BaseServiceV2<
       const status = await this.state.messenger.getMessageStatus(message)
       if (status === MessageStatus.STATE_ROOT_NOT_PUBLISHED) {
         isFinalized = false
+        break
       } else if (status === MessageStatus.IN_CHALLENGE_PERIOD) {
         // Checks whether a given batch has exceeded the verification threshold,
         // or is still inside its fraud proof window.
@@ -262,6 +263,9 @@ export class MessageRelayerService extends BaseServiceV2<
           (await this.state.messenger.contracts.l1.StateCommitmentChain.insideFraudProofWindow(
             stateRoot.batch.header
           )) === false
+        if (!isFinalized) {
+          break
+        }
       }
     }
 
