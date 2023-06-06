@@ -1,6 +1,11 @@
 src/contract-artifacts.ts
 src/contract-deployed-artifacts.ts
 
+!artifacts/
+artifacts/@openzeppelin/
+artifacts/build-info/
+*.dbg.json
+
 # Oasys files
 deploy-config/oasys.ts
 /oasys/
