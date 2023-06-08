@@ -15,7 +15,10 @@ import {
   OEContractsLike,
   CrossChainMessage,
 } from '@eth-optimism/sdk'
-import { Provider } from '@ethersproject/abstract-provider'
+import {
+  Provider,
+  BlockWithTransactions,
+} from '@ethersproject/abstract-provider'
 
 import Multicall2 from './contracts/Multicall2.json'
 
@@ -204,6 +207,14 @@ export class MessageRelayerService extends BaseServiceV2<
   }
 
   protected async main(): Promise<void> {
+    if (this.state.multicall2Contract && this.options.l1CrossDomainMessenger) {
+      await this.handleMultipleBlock()
+    } else {
+      await this.handleSingleBlock()
+    }
+  }
+
+  protected async handleSingleBlock(): Promise<void> {
     // Update metrics
     this.metrics.highestCheckedL2Tx.set(this.state.highestCheckedL2Tx)
     this.metrics.highestKnownL2Tx.set(this.state.highestKnownL2Tx)
@@ -251,6 +262,136 @@ export class MessageRelayerService extends BaseServiceV2<
       const status = await this.state.messenger.getMessageStatus(message)
       if (status === MessageStatus.STATE_ROOT_NOT_PUBLISHED) {
         isFinalized = false
+      } else if (status === MessageStatus.IN_CHALLENGE_PERIOD) {
+        // Checks whether a given batch has exceeded the verification threshold,
+        // or is still inside its fraud proof window.
+        const resolved = await this.state.messenger.toCrossChainMessage(message)
+        const stateRoot = await this.state.messenger.getMessageStateRoot(
+          resolved
+        )
+        isFinalized =
+          (await this.state.messenger.contracts.l1.StateCommitmentChain.insideFraudProofWindow(
+            stateRoot.batch.header
+          )) === false
+      }
+    }
+
+    if (!isFinalized) {
+      this.logger.info(
+        `tx not yet finalized, waiting: ${this.state.highestCheckedL2Tx}`
+      )
+      await new Promise((resolve) =>
+        setTimeout(() => resolve(true), this.options.pollInterval || 1000)
+      )
+      return
+    } else {
+      this.logger.info(
+        `tx is finalized, relaying: ${this.state.highestCheckedL2Tx}`
+      )
+    }
+
+    // If we got here then all messages in the transaction are finalized. Now we can relay
+    // each message to L1.
+    for (const message of messages) {
+      try {
+        const tx = await this.state.messenger.finalizeMessage(message, {
+          overrides: { gasLimit: await this.estimateGas(message) },
+        })
+        this.logger.info(`relayer sent tx: ${tx.hash}`)
+        this.metrics.numRelayedMessages.inc()
+      } catch (err) {
+        if (err.message.includes('message has already been received')) {
+          // It's fine, the message was relayed by someone else
+        } else {
+          throw err
+        }
+      }
+
+      await this.state.messenger.waitForMessageReceipt(message, {
+        pollIntervalMs: this.options.pollInterval,
+        timeoutMs: this.options.receiptTimeout,
+      })
+    }
+
+    // All messages have been relayed so we can move on to the next block.
+    this.state.highestCheckedL2Tx++
+  }
+
+  protected async handleMultipleBlock(): Promise<void> {
+    // Should never happen.
+    if (
+      !this.state.multicall2Contract ||
+      !this.options.l1CrossDomainMessenger
+    ) {
+      throw new Error(
+        `You can not use mulitcall to handle multiple bridge messages`
+      )
+    }
+
+    // Update metrics
+    this.metrics.highestCheckedL2Tx.set(this.state.highestCheckedL2Tx)
+    this.metrics.highestKnownL2Tx.set(this.state.highestKnownL2Tx)
+
+    // If we're already at the tip, then update the latest tip and loop again.
+    if (this.state.highestCheckedL2Tx > this.state.highestKnownL2Tx) {
+      this.state.highestKnownL2Tx =
+        await this.state.messenger.l2Provider.getBlockNumber()
+
+      // Sleeping for 1000ms is good enough since this is meant for development and not for live
+      // networks where we might want to restrict the number of requests per second.
+      await sleep(1000)
+      return
+    }
+
+    const blocks: BlockWithTransactions[] = []
+    for (let i = this.state.highestCheckedL2Tx; i < 100; i++) {
+      const block =
+        await this.state.messenger.l2Provider.getBlockWithTransactions(i)
+      if (block === null) {
+        break
+      }
+      blocks.push(block)
+    }
+
+    this.logger.info(
+      `checking L2 block ${this.state.highestCheckedL2Tx} ~ ${
+        this.state.highestCheckedL2Tx + blocks.length - 1
+      }`
+    )
+
+    const allBridgeTxMessages: CrossChainMessage[] = []
+
+    for (const block of blocks) {
+      // Should never happen.
+      if (block.transactions.length !== 1) {
+        throw new Error(
+          `got an unexpected number of transactions in block: ${block.number}`
+        )
+      }
+
+      const messages = await this.state.messenger.getMessagesByTransaction(
+        block.transactions[0].hash
+      )
+
+      if (messages.length !== 0) {
+        allBridgeTxMessages.concat(messages)
+      }
+    }
+
+    // No messages in this blocks transactions so we can move on to the next one.
+    if (allBridgeTxMessages.length === 0) {
+      this.state.highestCheckedL2Tx += blocks.length
+      return
+    }
+
+    // Make sure that all messages sent within the transaction are finalized. If any messages
+    // are not finalized, then we're going to break the loop which will trigger the sleep and
+    // wait for a few seconds before we check again to see if this transaction is finalized.
+    let isFinalized = true
+    for (const message of allBridgeTxMessages) {
+      const status = await this.state.messenger.getMessageStatus(message)
+      if (status === MessageStatus.STATE_ROOT_NOT_PUBLISHED) {
+        isFinalized = false
         break
       } else if (status === MessageStatus.IN_CHALLENGE_PERIOD) {
         // Checks whether a given batch has exceeded the verification threshold,
@@ -271,7 +412,8 @@ export class MessageRelayerService extends BaseServiceV2<
 
     if (!isFinalized) {
       this.logger.info(
-        `tx not yet finalized, waiting: ${this.state.highestCheckedL2Tx}`
+        `tx not yet finalized, waiting: ${this.state.highestCheckedL2Tx} ~
+        ${this.state.highestCheckedL2Tx + blocks.length - 1}`
       )
       await new Promise((resolve) =>
         setTimeout(() => resolve(true), this.options.pollInterval || 1000)
@@ -279,51 +421,29 @@ export class MessageRelayerService extends BaseServiceV2<
       return
     } else {
       this.logger.info(
-        `tx is finalized, relaying: ${this.state.highestCheckedL2Tx}`
+        `tx is finalized, relaying: ${this.state.highestCheckedL2Tx} ~
+        ${this.state.highestCheckedL2Tx + blocks.length - 1}`
       )
     }
 
     // If we got here then all messages in the transaction are finalized. Now we can relay
     // each message to L1.
-    if (this.state.multicall2Contract && this.options.l1CrossDomainMessenger) {
-      const calldataArray: Call[] = []
-      for (const message of messages) {
-        const finalizeMessageCalldata =
-          await this.state.messenger.getFinalizeMessageCalldata(message)
-        calldataArray.push({
-          target: this.options.l1CrossDomainMessenger,
-          callData: finalizeMessageCalldata,
-        })
-      }
-      const tx = await this.state.multicall2Contract.aggregate(calldataArray)
-      await tx.wait()
-      this.logger.info(`relayer sent multicall: ${tx.hash}`)
-      this.metrics.numRelayedMessages.inc(messages.length)
-    } else {
-      for (const message of messages) {
-        try {
-          const tx = await this.state.messenger.finalizeMessage(message, {
-            overrides: { gasLimit: await this.estimateGas(message) },
-          })
-          this.logger.info(`relayer sent tx: ${tx.hash}`)
-          this.metrics.numRelayedMessages.inc()
-        } catch (err) {
-          if (err.message.includes('message has already been received')) {
-            // It's fine, the message was relayed by someone else
-          } else {
-            throw err
-          }
-        }
-
-        await this.state.messenger.waitForMessageReceipt(message, {
-          pollIntervalMs: this.options.pollInterval,
-          timeoutMs: this.options.receiptTimeout,
-        })
-      }
+    const calldataArray: Call[] = []
+    for (const message of allBridgeTxMessages) {
+      const finalizeMessageCalldata =
+        await this.state.messenger.getFinalizeMessageCalldata(message)
+      calldataArray.push({
+        target: this.options.l1CrossDomainMessenger,
+        callData: finalizeMessageCalldata,
+      })
     }
+    const tx = await this.state.multicall2Contract.aggregate(calldataArray)
+    await tx.wait()
+    this.logger.info(`relayer sent multicall: ${tx.hash}`)
+    this.metrics.numRelayedMessages.inc(allBridgeTxMessages.length)
 
     // All messages have been relayed so we can move on to the next block.
-    this.state.highestCheckedL2Tx++
+    this.state.highestCheckedL2Tx += blocks.length
   }
 }
 
