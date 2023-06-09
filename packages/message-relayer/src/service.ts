@@ -368,7 +368,9 @@ export class MessageRelayerService extends BaseServiceV2<
     }
 
     const highestCheckableL2Tx =
-      this.state.highestCheckedL2Tx + blocks.length - 1
+      blocks.length === 0
+        ? this.state.highestCheckedL2Tx
+        : this.state.highestCheckedL2Tx + blocks.length - 1
     this.logger.info(
       `checking L2 block ${this.state.highestCheckedL2Tx} ~ ${highestCheckableL2Tx}`
     )
