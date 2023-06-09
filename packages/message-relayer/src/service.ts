@@ -14,6 +14,7 @@ import {
   MessageStatus,
   OEContractsLike,
   CrossChainMessage,
+  MessageDirection,
 } from '@eth-optimism/sdk'
 import {
   Provider,
@@ -332,6 +333,12 @@ export class MessageRelayerService extends BaseServiceV2<
     this.metrics.highestCheckedL2Tx.set(this.state.highestCheckedL2Tx)
     this.metrics.highestKnownL2Tx.set(this.state.highestKnownL2Tx)
 
+    this.logger.info(
+      `this.state.highestCheckedL2Tx is ${this.state.highestCheckedL2Tx}`
+    )
+    this.logger.info(
+      `this.state.highestKnownL2Tx is ${this.state.highestKnownL2Tx}`
+    )
     // If we're already at the tip, then update the latest tip and loop again.
     if (this.state.highestCheckedL2Tx > this.state.highestKnownL2Tx) {
       this.state.highestKnownL2Tx =
@@ -340,6 +347,9 @@ export class MessageRelayerService extends BaseServiceV2<
       // Sleeping for 1000ms is good enough since this is meant for development and not for live
       // networks where we might want to restrict the number of requests per second.
       await sleep(1000)
+      this.logger.info(
+        `this.state.highestCheckedL2Tx(${this.state.highestCheckedL2Tx}) > this.state.highestKnownL2Tx(${this.state.highestKnownL2Tx})`
+      )
       return
     }
 
@@ -353,13 +363,13 @@ export class MessageRelayerService extends BaseServiceV2<
       blocks.push(block)
     }
 
+    const highestCheckableL2Tx =
+      this.state.highestCheckedL2Tx + blocks.length - 1
     this.logger.info(
-      `checking L2 block ${this.state.highestCheckedL2Tx} ~ ${
-        this.state.highestCheckedL2Tx + blocks.length - 1
-      }`
+      `checking L2 block ${this.state.highestCheckedL2Tx} ~ ${highestCheckableL2Tx}`
     )
 
-    const allBridgeTxMessages: CrossChainMessage[] = []
+    let allBridgeTxMessages: CrossChainMessage[] = []
 
     for (const block of blocks) {
       // Should never happen.
@@ -370,17 +380,19 @@ export class MessageRelayerService extends BaseServiceV2<
       }
 
       const messages = await this.state.messenger.getMessagesByTransaction(
-        block.transactions[0].hash
+        block.transactions[0].hash,
+        { direction: MessageDirection.L2_TO_L1 }
       )
 
       if (messages.length !== 0) {
-        allBridgeTxMessages.concat(messages)
+        allBridgeTxMessages = [...allBridgeTxMessages, ...messages];
       }
     }
 
     // No messages in this blocks transactions so we can move on to the next one.
     if (allBridgeTxMessages.length === 0) {
       this.state.highestCheckedL2Tx += blocks.length
+      this.logger.info(`early return at blocks.length is ${blocks.length}`)
       return
     }
 
@@ -412,8 +424,7 @@ export class MessageRelayerService extends BaseServiceV2<
 
     if (!isFinalized) {
       this.logger.info(
-        `tx not yet finalized, waiting: ${this.state.highestCheckedL2Tx} ~
-        ${this.state.highestCheckedL2Tx + blocks.length - 1}`
+        `txs not yet finalized, waiting: ${this.state.highestCheckedL2Tx} ~ ${highestCheckableL2Tx}`
       )
       await new Promise((resolve) =>
         setTimeout(() => resolve(true), this.options.pollInterval || 1000)
@@ -421,8 +432,7 @@ export class MessageRelayerService extends BaseServiceV2<
       return
     } else {
       this.logger.info(
-        `tx is finalized, relaying: ${this.state.highestCheckedL2Tx} ~
-        ${this.state.highestCheckedL2Tx + blocks.length - 1}`
+        `txs are finalized, relaying: ${this.state.highestCheckedL2Tx} ~ ${highestCheckableL2Tx}`
       )
     }
 
