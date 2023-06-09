@@ -354,7 +354,11 @@ export class MessageRelayerService extends BaseServiceV2<
     }
 
     const blocks: BlockWithTransactions[] = []
-    for (let i = this.state.highestCheckedL2Tx; i < 100; i++) {
+    for (
+      let i = this.state.highestCheckedL2Tx;
+      i < this.state.highestCheckedL2Tx + 10;
+      i++
+    ) {
       const block =
         await this.state.messenger.l2Provider.getBlockWithTransactions(i)
       if (block === null) {
