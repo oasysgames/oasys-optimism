@@ -268,4 +268,24 @@ function step4Address() external view returns (address)
 
 
 
+## Events
+
+### Build
+
+```solidity
+event Build(address indexed builder, uint256 indexed chainId)
+```
+
+
+
+
+
+#### Parameters
+
+| Name | Type | Description |
+|---|---|---|
+| builder `indexed` | address | undefined |
+| chainId `indexed` | uint256 | undefined |
+
+
 

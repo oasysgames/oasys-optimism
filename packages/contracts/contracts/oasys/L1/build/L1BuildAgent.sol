@@ -29,6 +29,11 @@ contract L1BuildAgent {
     address[] private _builders;
     uint256[] private _chainIds;
 
+    /**********
+     * Events *
+     **********/
+    event Build(address indexed builder, uint256 indexed chainId);
+
     /***************
      * Constructor *
      ***************/
@@ -163,6 +168,8 @@ contract L1BuildAgent {
         L1BuildStep4(step4Address).build(_chainId, _builder);
         _builders.push(_builder);
         _chainIds.push(_chainId);
+
+        emit Build(_builder, _chainId);
     }
 
     /**
