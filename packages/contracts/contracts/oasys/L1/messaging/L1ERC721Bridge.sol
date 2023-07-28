@@ -111,7 +111,7 @@ contract L1ERC721Bridge is IL1ERC721Bridge, CrossDomainEnabled {
         uint256 _tokenId,
         uint32 _l2Gas,
         bytes calldata _data
-    ) internal {
+    ) internal virtual {
         // slither-disable-next-line reentrancy-events, reentrancy-benign
         IERC721(_l1Token).transferFrom(_from, address(this), _tokenId);
 
@@ -148,7 +148,7 @@ contract L1ERC721Bridge is IL1ERC721Bridge, CrossDomainEnabled {
         address _to,
         uint256 _tokenId,
         bytes calldata _data
-    ) external onlyFromCrossDomainAccount(l2ERC721Bridge) {
+    ) external virtual onlyFromCrossDomainAccount(l2ERC721Bridge) {
         // When a withdrawal is finalized on L1, the L1 Bridge transfers the funds to the withdrawer
         // slither-disable-next-line reentrancy-events
         IERC721(_l1Token).transferFrom(address(this), _to, _tokenId);

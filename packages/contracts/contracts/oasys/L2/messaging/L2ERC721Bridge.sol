@@ -6,7 +6,7 @@ import { IL1ERC721Bridge } from "../../L1/messaging/IL1ERC721Bridge.sol";
 import { IL2ERC721Bridge } from "./IL2ERC721Bridge.sol";
 
 /* Library Imports */
-import { ERC165Checker } from "@openzeppelin/contracts/utils/introspection/ERC165Checker.sol";
+import { ERC165Checker } from "@openzeppelin/contracts-4.9.0/utils/introspection/ERC165Checker.sol";
 import { CrossDomainEnabled } from "../../../libraries/bridge/CrossDomainEnabled.sol";
 import { Lib_PredeployAddresses } from "../../../libraries/constants/Lib_PredeployAddresses.sol";
 
