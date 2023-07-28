@@ -16,10 +16,7 @@ import {
   CrossChainMessage,
   MessageDirection,
 } from '@eth-optimism/sdk'
-import {
-  Provider,
-  BlockWithTransactions,
-} from '@ethersproject/abstract-provider'
+import { Provider } from '@ethersproject/abstract-provider'
 
 import Multicall2 from './contracts/Multicall2.json'
 
@@ -333,10 +330,10 @@ export class MessageRelayerService extends BaseServiceV2<
     this.metrics.highestCheckedL2Tx.set(this.state.highestCheckedL2Tx)
     this.metrics.highestKnownL2Tx.set(this.state.highestKnownL2Tx)
 
-    this.logger.info(
+    this.logger.debug(
       `this.state.highestCheckedL2Tx is ${this.state.highestCheckedL2Tx}`
     )
-    this.logger.info(
+    this.logger.debug(
       `this.state.highestKnownL2Tx is ${this.state.highestKnownL2Tx}`
     )
     // If we're already at the tip, then update the latest tip and loop again.
@@ -347,16 +344,20 @@ export class MessageRelayerService extends BaseServiceV2<
       // Sleeping for 1000ms is good enough since this is meant for development and not for live
       // networks where we might want to restrict the number of requests per second.
       await sleep(1000)
-      this.logger.info(
+      this.logger.debug(
         `this.state.highestCheckedL2Tx(${this.state.highestCheckedL2Tx}) > this.state.highestKnownL2Tx(${this.state.highestKnownL2Tx})`
       )
       return
     }
 
-    const blocks: BlockWithTransactions[] = []
+    const blockMaxBatchSize = 200
+    const messageMaxBatchSize = 10
+    let blockLength = 0
+    const allBridgeTxMessages: CrossChainMessage[] = []
+
     for (
       let i = this.state.highestCheckedL2Tx;
-      i < this.state.highestCheckedL2Tx + 20;
+      i <= this.state.highestCheckedL2Tx + blockMaxBatchSize;
       i++
     ) {
       const block =
@@ -364,20 +365,8 @@ export class MessageRelayerService extends BaseServiceV2<
       if (block === null) {
         break
       }
-      blocks.push(block)
-    }
+      blockLength++
 
-    const highestCheckableL2Tx =
-      blocks.length === 0
-        ? this.state.highestCheckedL2Tx
-        : this.state.highestCheckedL2Tx + blocks.length - 1
-    this.logger.info(
-      `checking L2 block ${this.state.highestCheckedL2Tx} ~ ${highestCheckableL2Tx}`
-    )
-
-    let allBridgeTxMessages: CrossChainMessage[] = []
-
-    for (const block of blocks) {
       // Should never happen.
       if (block.transactions.length !== 1) {
         throw new Error(
@@ -391,14 +380,26 @@ export class MessageRelayerService extends BaseServiceV2<
       )
 
       if (messages.length !== 0) {
-        allBridgeTxMessages = [...allBridgeTxMessages, ...messages];
+        allBridgeTxMessages.push(...messages)
+      }
+
+      if (allBridgeTxMessages.length >= messageMaxBatchSize) {
+        break
       }
     }
 
+    const highestCheckableL2Tx =
+      blockLength === 0
+        ? this.state.highestCheckedL2Tx
+        : this.state.highestCheckedL2Tx + blockLength - 1
+    this.logger.info(
+      `checking L2 block ${this.state.highestCheckedL2Tx} ~ ${highestCheckableL2Tx}`
+    )
+
     // No messages in this blocks transactions so we can move on to the next one.
     if (allBridgeTxMessages.length === 0) {
-      this.state.highestCheckedL2Tx += blocks.length
-      this.logger.info(`early return at blocks.length is ${blocks.length}`)
+      this.state.highestCheckedL2Tx += blockLength
+      this.logger.info(`early return at block length is ${blockLength}`)
       return
     }
 
@@ -445,21 +446,40 @@ export class MessageRelayerService extends BaseServiceV2<
     // If we got here then all messages in the transaction are finalized. Now we can relay
     // each message to L1.
     const calldataArray: Call[] = []
+    let multicall2GasLimit = 0
     for (const message of allBridgeTxMessages) {
-      const finalizeMessageCalldata =
-        await this.state.messenger.getFinalizeMessageCalldata(message)
-      calldataArray.push({
-        target: this.options.l1CrossDomainMessenger,
-        callData: finalizeMessageCalldata,
-      })
+      try {
+        const gasLimit = await this.estimateGas(message) // check if error happens
+        multicall2GasLimit += gasLimit
+        const finalizeMessageCalldata =
+          await this.state.messenger.getFinalizeMessageCalldata(message)
+        calldataArray.push({
+          target: this.options.l1CrossDomainMessenger,
+          callData: finalizeMessageCalldata,
+        })
+      } catch (err) {
+        if (err.message.includes('message has already been received')) {
+          // It's fine, the message was relayed by someone else
+        } else {
+          throw err
+        }
+      }
     }
-    const tx = await this.state.multicall2Contract.aggregate(calldataArray)
+    const requireSuccess = true
+    const txOptions = {
+      gasLimit: multicall2GasLimit,
+    }
+    const tx = await this.state.multicall2Contract.tryAggregate(
+      requireSuccess,
+      calldataArray,
+      txOptions
+    )
     await tx.wait()
     this.logger.info(`relayer sent multicall: ${tx.hash}`)
     this.metrics.numRelayedMessages.inc(allBridgeTxMessages.length)
 
     // All messages have been relayed so we can move on to the next block.
-    this.state.highestCheckedL2Tx += blocks.length
+    this.state.highestCheckedL2Tx += blockLength
   }
 }
 
