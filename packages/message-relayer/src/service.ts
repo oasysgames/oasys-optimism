@@ -351,7 +351,7 @@ export class MessageRelayerService extends BaseServiceV2<
     }
 
     const blockMaxBatchSize = 200
-    const messageMaxBatchSize = 10
+    const messageMaxBatchSize = 5
     let blockLength = 0
     const allBridgeTxMessages: CrossChainMessage[] = []
 
