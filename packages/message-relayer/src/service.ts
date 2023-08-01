@@ -446,11 +446,9 @@ export class MessageRelayerService extends BaseServiceV2<
     // If we got here then all messages in the transaction are finalized. Now we can relay
     // each message to L1.
     const calldataArray: Call[] = []
-    let multicall2GasLimit = 0
     for (const message of allBridgeTxMessages) {
       try {
-        const gasLimit = await this.estimateGas(message) // check if error happens
-        multicall2GasLimit += gasLimit
+        await this.estimateGas(message) // check if error happens
         const finalizeMessageCalldata =
           await this.state.messenger.getFinalizeMessageCalldata(message)
         calldataArray.push({
@@ -465,14 +463,11 @@ export class MessageRelayerService extends BaseServiceV2<
         }
       }
     }
+
     const requireSuccess = true
-    const txOptions = {
-      gasLimit: multicall2GasLimit,
-    }
     const tx = await this.state.multicall2Contract.tryAggregate(
       requireSuccess,
-      calldataArray,
-      txOptions
+      calldataArray
     )
     await tx.wait()
     this.logger.info(`relayer sent multicall: ${tx.hash}`)
