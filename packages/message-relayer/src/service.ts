@@ -56,6 +56,10 @@ type Call = {
   callData: string
 }
 
+type BlockNumberToCrossChainMessages = {
+  [key: number]: CrossChainMessage[]
+}
+
 export class MessageRelayerService extends BaseServiceV2<
   MessageRelayerOptions,
   MessageRelayerMetrics,
@@ -353,7 +357,7 @@ export class MessageRelayerService extends BaseServiceV2<
     const blockMaxBatchSize = 200
     const messageMaxBatchSize = 5
     let blockLength = 0
-    const allBridgeTxMessages: CrossChainMessage[] = []
+    const blockNumberToCrossChainMessages: BlockNumberToCrossChainMessages = {}
 
     for (
       let i = this.state.highestCheckedL2Tx;
@@ -380,24 +384,27 @@ export class MessageRelayerService extends BaseServiceV2<
       )
 
       if (messages.length !== 0) {
-        allBridgeTxMessages.push(...messages)
+        blockNumberToCrossChainMessages[
+          this.state.highestCheckedL2Tx + blockLength
+        ] = messages
       }
 
-      if (allBridgeTxMessages.length >= messageMaxBatchSize) {
+      if (
+        Object.keys(blockNumberToCrossChainMessages).length >=
+        messageMaxBatchSize
+      ) {
         break
       }
     }
 
-    const highestCheckableL2Tx =
-      blockLength === 0
-        ? this.state.highestCheckedL2Tx
-        : this.state.highestCheckedL2Tx + blockLength - 1
     this.logger.info(
-      `checking L2 block ${this.state.highestCheckedL2Tx} ~ ${highestCheckableL2Tx}`
+      `checking L2 block ${this.state.highestCheckedL2Tx} ~ ${
+        this.state.highestCheckedL2Tx + blockLength
+      }`
     )
 
     // No messages in this blocks transactions so we can move on to the next one.
-    if (allBridgeTxMessages.length === 0) {
+    if (Object.keys(blockNumberToCrossChainMessages).length === 0) {
       this.state.highestCheckedL2Tx += blockLength
       this.logger.info(`early return at block length is ${blockLength}`)
       return
@@ -406,30 +413,22 @@ export class MessageRelayerService extends BaseServiceV2<
     // Make sure that all messages sent within the transaction are finalized. If any messages
     // are not finalized, then we're going to break the loop which will trigger the sleep and
     // wait for a few seconds before we check again to see if this transaction is finalized.
-    let isFinalized = true
-    for (const message of allBridgeTxMessages) {
-      const status = await this.state.messenger.getMessageStatus(message)
-      if (status === MessageStatus.STATE_ROOT_NOT_PUBLISHED) {
-        isFinalized = false
+    let highestCheckableL2Tx: number = this.state.highestCheckedL2Tx
+    const verifiedMessages: CrossChainMessage[] = []
+    for (const blockNumberString of Object.keys(
+      blockNumberToCrossChainMessages
+    )) {
+      const blockNumber = Number(blockNumberString)
+      const messages = blockNumberToCrossChainMessages[blockNumber]
+      const isVerifiedMessages = await this.isVerifiedMessages(messages)
+      if (!isVerifiedMessages) {
         break
-      } else if (status === MessageStatus.IN_CHALLENGE_PERIOD) {
-        // Checks whether a given batch has exceeded the verification threshold,
-        // or is still inside its fraud proof window.
-        const resolved = await this.state.messenger.toCrossChainMessage(message)
-        const stateRoot = await this.state.messenger.getMessageStateRoot(
-          resolved
-        )
-        isFinalized =
-          (await this.state.messenger.contracts.l1.StateCommitmentChain.insideFraudProofWindow(
-            stateRoot.batch.header
-          )) === false
-        if (!isFinalized) {
-          break
-        }
       }
+      highestCheckableL2Tx = blockNumber
+      verifiedMessages.push(...messages)
     }
 
-    if (!isFinalized) {
+    if (verifiedMessages.length === 0) {
       this.logger.info(
         `txs not yet finalized, waiting: ${this.state.highestCheckedL2Tx} ~ ${highestCheckableL2Tx}`
       )
@@ -446,7 +445,7 @@ export class MessageRelayerService extends BaseServiceV2<
     // If we got here then all messages in the transaction are finalized. Now we can relay
     // each message to L1.
     const calldataArray: Call[] = []
-    for (const message of allBridgeTxMessages) {
+    for (const message of verifiedMessages) {
       try {
         await this.estimateGas(message) // check if error happens
         const finalizeMessageCalldata =
@@ -471,10 +470,38 @@ export class MessageRelayerService extends BaseServiceV2<
     )
     await tx.wait()
     this.logger.info(`relayer sent multicall: ${tx.hash}`)
-    this.metrics.numRelayedMessages.inc(allBridgeTxMessages.length)
+    this.metrics.numRelayedMessages.inc(verifiedMessages.length)
 
     // All messages have been relayed so we can move on to the next block.
-    this.state.highestCheckedL2Tx += blockLength
+    this.state.highestCheckedL2Tx = highestCheckableL2Tx
+  }
+
+  protected async isVerifiedMessages(
+    messages: CrossChainMessage[]
+  ): Promise<boolean> {
+    let isFinalized = true
+    for (const message of messages) {
+      const status = await this.state.messenger.getMessageStatus(message)
+      if (status === MessageStatus.STATE_ROOT_NOT_PUBLISHED) {
+        isFinalized = false
+        break
+      } else if (status === MessageStatus.IN_CHALLENGE_PERIOD) {
+        // Checks whether a given batch has exceeded the verification threshold,
+        // or is still inside its fraud proof window.
+        const resolved = await this.state.messenger.toCrossChainMessage(message)
+        const stateRoot = await this.state.messenger.getMessageStateRoot(
+          resolved
+        )
+        isFinalized =
+          (await this.state.messenger.contracts.l1.StateCommitmentChain.insideFraudProofWindow(
+            stateRoot.batch.header
+          )) === false
+        if (!isFinalized) {
+          break
+        }
+      }
+    }
+    return isFinalized
   }
 }
 
