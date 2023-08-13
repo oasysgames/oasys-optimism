@@ -464,9 +464,20 @@ export class MessageRelayerService extends BaseServiceV2<
     }
 
     const requireSuccess = true
+    const multicallEstimateGas =
+      await this.state.multicall2Contract.estimateGas.tryAggregate(
+        requireSuccess,
+        calldataArray
+      )
+    const overrideOptions = {
+      gasLimit: ~~(
+        multicallEstimateGas.toNumber() * (this.options.gasMultiplier || 1.0)
+      ),
+    }
     const tx = await this.state.multicall2Contract.tryAggregate(
       requireSuccess,
-      calldataArray
+      calldataArray,
+      overrideOptions
     )
     await tx.wait()
     this.logger.info(`relayer sent multicall: ${tx.hash}`)
