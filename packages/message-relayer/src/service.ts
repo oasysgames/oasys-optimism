@@ -32,6 +32,8 @@ type MessageRelayerOptions = {
   canonicalTransactionChain?: string
   bondManager?: string
   isMulticall?: string
+  maxBlockBatchSize?: number
+  maxMessageBatchSize?: number
   pollInterval?: number
   receiptTimeout?: number
   gasMultiplier?: number
@@ -114,6 +116,16 @@ export class MessageRelayerService extends BaseServiceV2<
         isMulticall: {
           validator: validators.str,
           desc: 'Whether use multicall contract when the relay.',
+        },
+        maxBlockBatchSize: {
+          validator: validators.num,
+          desc: 'If using multicall, max block batch size for multicall messaging relay.',
+          default: 200,
+        },
+        maxMessageBatchSize: {
+          validator: validators.num,
+          desc: 'If using multicall, max message batch size for multicall messaging relay.',
+          default: 5,
         },
         pollInterval: {
           validator: validators.num,
@@ -354,14 +366,12 @@ export class MessageRelayerService extends BaseServiceV2<
       return
     }
 
-    const blockMaxBatchSize = 200
-    const messageMaxBatchSize = 5
     let blockLength = 0
     const blockNumberToCrossChainMessages: BlockNumberToCrossChainMessages = {}
 
     for (
       let i = this.state.highestCheckedL2Tx;
-      i <= this.state.highestCheckedL2Tx + blockMaxBatchSize;
+      i <= this.state.highestCheckedL2Tx + this.options.maxBlockBatchSize;
       i++
     ) {
       const block =
@@ -391,7 +401,7 @@ export class MessageRelayerService extends BaseServiceV2<
 
       if (
         Object.keys(blockNumberToCrossChainMessages).length >=
-        messageMaxBatchSize
+        this.options.maxMessageBatchSize
       ) {
         break
       }
