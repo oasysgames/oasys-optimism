@@ -125,7 +125,7 @@ export class MessageRelayerService extends BaseServiceV2<
         maxMessageBatchSize: {
           validator: validators.num,
           desc: 'If using multicall, max message batch size for multicall messaging relay.',
-          default: 5,
+          default: 20,
         },
         pollInterval: {
           validator: validators.num,
