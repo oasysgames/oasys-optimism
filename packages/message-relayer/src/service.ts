@@ -371,7 +371,7 @@ export class MessageRelayerService extends BaseServiceV2<
 
     for (
       let i = this.state.highestCheckedL2Tx;
-      i <= this.state.highestCheckedL2Tx + this.options.maxBlockBatchSize;
+      i < this.state.highestCheckedL2Tx + this.options.maxBlockBatchSize;
       i++
     ) {
       const block =
