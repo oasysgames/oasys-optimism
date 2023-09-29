@@ -1,5 +1,5 @@
 /* Imports: External */
-import { Contract, Signer } from 'ethers'
+import { BigNumber, Contract, Signer } from 'ethers'
 import { sleep } from '@eth-optimism/core-utils'
 import {
   BaseServiceV2,
@@ -32,15 +32,15 @@ type MessageRelayerOptions = {
   canonicalTransactionChain?: string
   bondManager?: string
   isMulticall?: string
+  multicallGasLimit?: number
   maxBlockBatchSize?: number
-  maxMessageBatchSize?: number
   pollInterval?: number
   receiptTimeout?: number
   gasMultiplier?: number
 }
 
 type MessageRelayerMetrics = {
-  highestCheckedL2Tx: Gauge
+  highestCheckableL2Tx: Gauge
   highestKnownL2Tx: Gauge
   numRelayedMessages: Counter
 }
@@ -49,17 +49,13 @@ type MessageRelayerState = {
   wallet: Signer
   messenger: CrossChainMessenger
   multicall2Contract?: Contract
-  highestCheckedL2Tx: number
+  highestCheckableL2Tx: number
   highestKnownL2Tx: number
 }
 
 type Call = {
   target: string
   callData: string
-}
-
-type BlockNumberToCrossChainMessages = {
-  [key: number]: CrossChainMessage[]
 }
 
 export class MessageRelayerService extends BaseServiceV2<
@@ -117,15 +113,15 @@ export class MessageRelayerService extends BaseServiceV2<
           validator: validators.str,
           desc: 'Whether use multicall contract when the relay.',
         },
+        multicallGasLimit: {
+          validator: validators.num,
+          desc: 'gas limit for multicall contract when the relay',
+          default: 1500000,
+        },
         maxBlockBatchSize: {
           validator: validators.num,
           desc: 'If using multicall, max block batch size for multicall messaging relay.',
           default: 200,
-        },
-        maxMessageBatchSize: {
-          validator: validators.num,
-          desc: 'If using multicall, max message batch size for multicall messaging relay.',
-          default: 20,
         },
         pollInterval: {
           validator: validators.num,
@@ -144,9 +140,9 @@ export class MessageRelayerService extends BaseServiceV2<
         },
       },
       metricsSpec: {
-        highestCheckedL2Tx: {
+        highestCheckableL2Tx: {
           type: Gauge,
-          desc: 'Highest L2 tx that has been scanned for messages',
+          desc: 'Highest L2 tx that has been checkable',
         },
         highestKnownL2Tx: {
           type: Gauge,
@@ -210,7 +206,7 @@ export class MessageRelayerService extends BaseServiceV2<
       )
     }
 
-    this.state.highestCheckedL2Tx = this.options.fromL2TransactionIndex || 1
+    this.state.highestCheckableL2Tx = this.options.fromL2TransactionIndex || 1
     this.state.highestKnownL2Tx =
       await this.state.messenger.l2Provider.getBlockNumber()
   }
@@ -230,11 +226,11 @@ export class MessageRelayerService extends BaseServiceV2<
 
   protected async handleSingleBlock(): Promise<void> {
     // Update metrics
-    this.metrics.highestCheckedL2Tx.set(this.state.highestCheckedL2Tx)
+    this.metrics.highestCheckableL2Tx.set(this.state.highestCheckableL2Tx)
     this.metrics.highestKnownL2Tx.set(this.state.highestKnownL2Tx)
 
     // If we're already at the tip, then update the latest tip and loop again.
-    if (this.state.highestCheckedL2Tx > this.state.highestKnownL2Tx) {
+    if (this.state.highestCheckableL2Tx > this.state.highestKnownL2Tx) {
       this.state.highestKnownL2Tx =
         await this.state.messenger.l2Provider.getBlockNumber()
 
@@ -244,11 +240,11 @@ export class MessageRelayerService extends BaseServiceV2<
       return
     }
 
-    this.logger.info(`checking L2 block ${this.state.highestCheckedL2Tx}`)
+    this.logger.info(`checking L2 block ${this.state.highestCheckableL2Tx}`)
 
     const block =
       await this.state.messenger.l2Provider.getBlockWithTransactions(
-        this.state.highestCheckedL2Tx
+        this.state.highestCheckableL2Tx
       )
 
     // Should never happen.
@@ -264,7 +260,7 @@ export class MessageRelayerService extends BaseServiceV2<
 
     // No messages in this transaction so we can move on to the next one.
     if (messages.length === 0) {
-      this.state.highestCheckedL2Tx++
+      this.state.highestCheckableL2Tx++
       return
     }
 
@@ -292,7 +288,7 @@ export class MessageRelayerService extends BaseServiceV2<
 
     if (!isFinalized) {
       this.logger.info(
-        `tx not yet finalized, waiting: ${this.state.highestCheckedL2Tx}`
+        `tx not yet finalized, waiting: ${this.state.highestCheckableL2Tx}`
       )
       await new Promise((resolve) =>
         setTimeout(() => resolve(true), this.options.pollInterval || 1000)
@@ -300,7 +296,7 @@ export class MessageRelayerService extends BaseServiceV2<
       return
     } else {
       this.logger.info(
-        `tx is finalized, relaying: ${this.state.highestCheckedL2Tx}`
+        `tx is finalized, relaying: ${this.state.highestCheckableL2Tx}`
       )
     }
 
@@ -328,7 +324,7 @@ export class MessageRelayerService extends BaseServiceV2<
     }
 
     // All messages have been relayed so we can move on to the next block.
-    this.state.highestCheckedL2Tx++
+    this.state.highestCheckableL2Tx++
   }
 
   protected async handleMultipleBlock(): Promise<void> {
@@ -343,17 +339,17 @@ export class MessageRelayerService extends BaseServiceV2<
     }
 
     // Update metrics
-    this.metrics.highestCheckedL2Tx.set(this.state.highestCheckedL2Tx)
+    this.metrics.highestCheckableL2Tx.set(this.state.highestCheckableL2Tx)
     this.metrics.highestKnownL2Tx.set(this.state.highestKnownL2Tx)
 
     this.logger.debug(
-      `this.state.highestCheckedL2Tx is ${this.state.highestCheckedL2Tx}`
+      `this.state.highestCheckableL2Tx is ${this.state.highestCheckableL2Tx}`
     )
     this.logger.debug(
       `this.state.highestKnownL2Tx is ${this.state.highestKnownL2Tx}`
     )
     // If we're already at the tip, then update the latest tip and loop again.
-    if (this.state.highestCheckedL2Tx > this.state.highestKnownL2Tx) {
+    if (this.state.highestCheckableL2Tx > this.state.highestKnownL2Tx) {
       this.state.highestKnownL2Tx =
         await this.state.messenger.l2Provider.getBlockNumber()
 
@@ -361,17 +357,20 @@ export class MessageRelayerService extends BaseServiceV2<
       // networks where we might want to restrict the number of requests per second.
       await sleep(1000)
       this.logger.debug(
-        `this.state.highestCheckedL2Tx(${this.state.highestCheckedL2Tx}) > this.state.highestKnownL2Tx(${this.state.highestKnownL2Tx})`
+        `this.state.highestCheckableL2Tx(${this.state.highestCheckableL2Tx}) > this.state.highestKnownL2Tx(${this.state.highestKnownL2Tx})`
       )
       return
     }
 
     let blockLength = 0
-    const blockNumberToCrossChainMessages: BlockNumberToCrossChainMessages = {}
+    const estimateCalldataArray: Call[] = []
+    const calldataArray: Call[] = []
+    const requireSuccess = true
+    let multicallEstimateGas: BigNumber
 
     for (
-      let i = this.state.highestCheckedL2Tx;
-      i < this.state.highestCheckedL2Tx + this.options.maxBlockBatchSize;
+      let i = this.state.highestCheckableL2Tx;
+      i < this.state.highestCheckableL2Tx + this.options.maxBlockBatchSize;
       i++
     ) {
       const block =
@@ -379,7 +378,6 @@ export class MessageRelayerService extends BaseServiceV2<
       if (block === null) {
         break
       }
-      blockLength++
 
       // Should never happen.
       if (block.transactions.length !== 1) {
@@ -393,92 +391,110 @@ export class MessageRelayerService extends BaseServiceV2<
         { direction: MessageDirection.L2_TO_L1 }
       )
 
-      if (messages.length !== 0) {
-        blockNumberToCrossChainMessages[
-          this.state.highestCheckedL2Tx + blockLength
-        ] = messages
+      if (messages.length === 0) {
+        blockLength++
+        continue
       }
 
-      if (
-        Object.keys(blockNumberToCrossChainMessages).length >=
-        this.options.maxMessageBatchSize
-      ) {
-        break
-      }
-    }
-
-    this.logger.info(
-      `checking L2 block ${this.state.highestCheckedL2Tx} ~ ${
-        this.state.highestCheckedL2Tx + blockLength
-      }`
-    )
-
-    // No messages in this blocks transactions so we can move on to the next one.
-    if (Object.keys(blockNumberToCrossChainMessages).length === 0) {
-      this.state.highestCheckedL2Tx += blockLength
-      this.logger.info(`early return at block length is ${blockLength}`)
-      return
-    }
-
-    // Make sure that all messages sent within the transaction are finalized. If any messages
-    // are not finalized, then we're going to break the loop which will trigger the sleep and
-    // wait for a few seconds before we check again to see if this transaction is finalized.
-    let highestCheckableL2Tx: number = this.state.highestCheckedL2Tx
-    const verifiedMessages: CrossChainMessage[] = []
-    for (const blockNumberString of Object.keys(
-      blockNumberToCrossChainMessages
-    )) {
-      const blockNumber = Number(blockNumberString)
-      const messages = blockNumberToCrossChainMessages[blockNumber]
       const isVerifiedMessages = await this.isVerifiedMessages(messages)
       if (!isVerifiedMessages) {
         break
       }
-      highestCheckableL2Tx = blockNumber
-      verifiedMessages.push(...messages)
-    }
 
-    if (verifiedMessages.length === 0) {
-      this.logger.info(
-        `txs not yet finalized, waiting: ${this.state.highestCheckedL2Tx} ~ ${highestCheckableL2Tx}`
-      )
-      await new Promise((resolve) =>
-        setTimeout(() => resolve(true), this.options.pollInterval || 1000)
-      )
-      return
-    } else {
-      this.logger.info(
-        `txs are finalized, relaying: ${this.state.highestCheckedL2Tx} ~ ${highestCheckableL2Tx}`
-      )
-    }
+      const newCalldataArray: Call[] = []
+      let canAddCalldata = true // whether can add calldata to calldataArray
 
-    // If we got here then all messages in the transaction are finalized. Now we can relay
-    // each message to L1.
-    const calldataArray: Call[] = []
-    for (const message of verifiedMessages) {
-      try {
-        await this.estimateGas(message) // check if error happens
+      for (const message of messages) {
+        try {
+          await this.estimateGas(message) // check if error happens
+        } catch (err) {
+          if (err.message.includes('message has already been received')) {
+            // It's fine, the message was relayed by someone else
+            continue
+          } else {
+            throw err
+          }
+        }
+
         const finalizeMessageCalldata =
           await this.state.messenger.getFinalizeMessageCalldata(message)
-        calldataArray.push({
+        const newCalldata = {
           target: this.options.l1CrossDomainMessenger,
           callData: finalizeMessageCalldata,
-        })
-      } catch (err) {
-        if (err.message.includes('message has already been received')) {
-          // It's fine, the message was relayed by someone else
-        } else {
-          throw err
         }
+        estimateCalldataArray.push(newCalldata)
+
+        try {
+          multicallEstimateGas =
+            await this.state.multicall2Contract.estimateGas.tryAggregate(
+              requireSuccess,
+              estimateCalldataArray
+            )
+        } catch (err) {
+          if (err.message.includes('gas required exceeds allowance')) {
+            canAddCalldata = false
+            break
+          } else {
+            throw err
+          }
+        }
+
+        if (
+          this.options.multicallGasLimit &&
+          multicallEstimateGas.toNumber() * this.options.gasMultiplier >
+            this.options.multicallGasLimit
+        ) {
+          canAddCalldata = false
+          break
+        }
+        newCalldataArray.push(newCalldata)
+      }
+
+      if (!canAddCalldata) {
+        break
+      }
+      blockLength++
+      calldataArray.push(...newCalldataArray)
+    }
+
+    if (blockLength > 1) {
+      this.logger.info(
+        `checking L2 block ${this.state.highestCheckableL2Tx} ~ ${
+          this.state.highestCheckableL2Tx + blockLength - 1
+        }`
+      )
+    } else {
+      this.logger.info(`checking L2 block ${this.state.highestCheckableL2Tx}`)
+    }
+
+    // No messages in this blocks transactions so we can move on to the next one.
+    if (calldataArray.length === 0) {
+      if (blockLength > 0) {
+        this.state.highestCheckableL2Tx += blockLength
+        return
+      } else {
+        this.logger.info(
+          `txs not yet finalized, waiting: ${this.state.highestCheckableL2Tx}`
+        )
+        await new Promise((resolve) =>
+          setTimeout(() => resolve(true), this.options.pollInterval || 1000)
+        )
+        return
       }
     }
 
-    const requireSuccess = true
-    const multicallEstimateGas =
-      await this.state.multicall2Contract.estimateGas.tryAggregate(
-        requireSuccess,
-        calldataArray
+    if (blockLength > 1) {
+      this.logger.info(
+        `txs are finalized, relaying: ${this.state.highestCheckableL2Tx} ~ ${
+          this.state.highestCheckableL2Tx + blockLength - 1
+        }`
       )
+    } else {
+      this.logger.info(
+        `txs are finalized, relaying: ${this.state.highestCheckableL2Tx}`
+      )
+    }
+
     const overrideOptions = {
       gasLimit: ~~(
         multicallEstimateGas.toNumber() * (this.options.gasMultiplier || 1.0)
@@ -491,10 +507,10 @@ export class MessageRelayerService extends BaseServiceV2<
     )
     await tx.wait()
     this.logger.info(`relayer sent multicall: ${tx.hash}`)
-    this.metrics.numRelayedMessages.inc(verifiedMessages.length)
+    this.metrics.numRelayedMessages.inc(calldataArray.length)
 
     // All messages have been relayed so we can move on to the next block.
-    this.state.highestCheckedL2Tx = highestCheckableL2Tx
+    this.state.highestCheckableL2Tx += blockLength
   }
 
   protected async isVerifiedMessages(
