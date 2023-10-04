@@ -404,6 +404,8 @@ export class MessageRelayerService extends BaseServiceV2<
       const newCalldataArray: Call[] = []
       let canAddCalldata = true // whether can add calldata to calldataArray
 
+      let newMulticallEstimateGas: BigNumber
+
       for (const message of messages) {
         try {
           await this.estimateGas(message) // check if error happens
@@ -425,7 +427,7 @@ export class MessageRelayerService extends BaseServiceV2<
         estimateCalldataArray.push(newCalldata)
 
         try {
-          multicallEstimateGas =
+          newMulticallEstimateGas =
             await this.state.multicall2Contract.estimateGas.tryAggregate(
               requireSuccess,
               estimateCalldataArray
@@ -441,7 +443,7 @@ export class MessageRelayerService extends BaseServiceV2<
 
         if (
           this.options.multicallGasLimit &&
-          multicallEstimateGas.toNumber() * this.options.gasMultiplier >
+          newMulticallEstimateGas.toNumber() * this.options.gasMultiplier >
             this.options.multicallGasLimit
         ) {
           canAddCalldata = false
@@ -454,6 +456,7 @@ export class MessageRelayerService extends BaseServiceV2<
         break
       }
       blockLength++
+      multicallEstimateGas = newMulticallEstimateGas
       calldataArray.push(...newCalldataArray)
     }
 
