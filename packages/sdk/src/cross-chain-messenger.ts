@@ -636,6 +636,27 @@ export class CrossChainMessenger implements ICrossChainMessenger {
     return challengePeriod.toNumber()
   }
 
+  public async getFinalizeMessageCalldata(message: MessageLike) {
+    const resolved = await this.toCrossChainMessage(message)
+    if (resolved.direction === MessageDirection.L1_TO_L2) {
+      throw new Error(`cannot finalize L1 to L2 message`)
+    }
+
+    const proof = await this.getMessageProof(resolved)
+    const encodedFunctionCall =
+      this.contracts.l1.L1CrossDomainMessenger.interface.encodeFunctionData(
+        'relayMessage',
+        [
+          resolved.target,
+          resolved.sender,
+          resolved.message,
+          resolved.messageNonce,
+          proof,
+        ]
+      )
+    return encodedFunctionCall
+  }
+
   public async getMessageStateRoot(
     message: MessageLike
   ): Promise<StateRoot | null> {
