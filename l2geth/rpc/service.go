@@ -98,6 +98,18 @@ func (r *serviceRegistry) callback(method string) *callback {
 	if len(elem) != 2 {
 		return nil
 	}
+
+	// support `rollup_personal`
+	parentElem := elem[1]
+	count := strings.Count(parentElem, serviceMethodSeparator)
+	if count == 1 {
+		childElem := strings.SplitN(parentElem, serviceMethodSeparator, 2)
+		elem[0] = elem[0] + serviceMethodSeparator + childElem[0]
+		elem[1] = childElem[1]
+	} else if 1 < count {
+		return nil
+	}
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.services[elem[0]].callbacks[elem[1]]
